@@ -1,0 +1,45 @@
+
+@import url('https://fonts.googleapis.com/css2?family=Shippori+Mincho:wght@400;500;600;700&family=Zen+Kaku+Gothic+New:wght@400;500;700;900&family=JetBrains+Mono:wght@400;600&display=swap');
+
+:root {
+  /* ---- Color: washi paper, sumi ink, fuji dusk, sakura bloom ---- */
+  --color-washi: #F7F1E6;        /* paper background */
+  --color-washi-deep: #EDE3D0;   /* paper shadow / card edge */
+  --color-sumi: #221F1C;         /* ink — primary text */
+  --color-sumi-soft: #57514A;    /* secondary text */
+  --color-fuji: #3D4F66;         /* mountain / header ink-blue */
+  --color-fuji-deep: #2A3B4F;    /* mountain shadow */
+  --color-dawn-top: #F4C9A8;     /* sky gradient top */
+  --color-dawn-bottom: #F7E3CE;  /* sky gradient bottom */
+  --color-sakura: #F0AFC4;       /* petal / accent pink */
+  --color-sakura-deep: #DD7E9B;  /* petal shadow / hover */
+  --color-gold: #BD8A33;         /* seal / accent line */
+
+  /* ---- Type ---- */
+  --font-display: 'Shippori Mincho', 'Hiragino Mincho ProN', serif;
+  --font-body: 'Zen Kaku Gothic New', 'Hiragino Sans', sans-serif;
+  --font-mono: 'JetBrains Mono', monospace;
+
+  --fs-display-lg: clamp(2.1rem, 4vw + 1rem, 3.4rem);
+  --fs-display-md: clamp(1.5rem, 2vw + 1rem, 2.1rem);
+  --fs-body: 1rem;
+  --fs-small: 0.85rem;
+  --fs-caption: 0.7rem;
+
+  /* ---- Layout rhythm ---- */
+  --space-xs: 0.4rem;
+  --space-sm: 0.8rem;
+  --space-md: 1.4rem;
+  --space-lg: 2.4rem;
+  --space-xl: 4rem;
+
+  --radius-card: 4px;
+  --header-height: 64px;
+  --header-height-scrolled: 52px;
+  --content-max-width: 1080px;
+
+  --shadow-card: 0 6px 24px rgba(34, 31, 28, 0.08);
+  --border-hairline: 1px solid rgba(34, 31, 28, 0.12);
+
+  --ease-soft: cubic-bezier(0.4, 0, 0.2, 1);
+}

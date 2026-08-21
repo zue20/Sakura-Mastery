@@ -1,0 +1,24 @@
+{
+  "expo": {
+    "name": "SakuraMastery",
+    "slug": "sakura-mastery",
+    "scheme": "sakuramastery",
+    "version": "1.0.0",
+    "orientation": "portrait",
+    "userInterfaceStyle": "light",
+    "plugins": [
+      "expo-sharing",
+      "expo-font",
+      "expo-splash-screen",
+      "expo-secure-store"
+    ],
+    "web": {
+      "name": "SakuraMastery",
+      "shortName": "Sakura",
+      "themeColor": "#C65D7B",
+      "backgroundColor": "#FBF6F4",
+      "display": "standalone",
+      "bundler": "metro"
+    }
+  }
+}
