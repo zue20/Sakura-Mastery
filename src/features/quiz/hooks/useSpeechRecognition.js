@@ -1,3 +1,4 @@
+
 import { useState, useRef, useCallback, useEffect } from 'react';
 
 const SpeechRecognitionAPI =
@@ -7,13 +8,30 @@ const SpeechRecognitionAPI =
 
 const isSecureCtx = typeof window !== 'undefined' ? window.isSecureContext : true;
 
+
+const isIOS =
+  typeof navigator !== 'undefined' && /iPhone|iPad|iPod/i.test(navigator.userAgent);
+
+const isStandalonePWA =
+  typeof window !== 'undefined' &&
+  (window.navigator.standalone === true ||
+    window.matchMedia?.('(display-mode: standalone)').matches);
+
+const isIOSInstalledPWA = isIOS && isStandalonePWA;
+
 export function useSpeechRecognition({ lang = 'ja-JP' } = {}) {
   const hasApi = !!SpeechRecognitionAPI;
 
-  const [isSupported] = useState(hasApi && isSecureCtx);
+  const [isSupported] = useState(hasApi && isSecureCtx && !isIOSInstalledPWA);
 
   const [unavailableReason] = useState(
-    !hasApi ? 'unsupported-browser' : !isSecureCtx ? 'insecure-connection' : null
+    !hasApi
+      ? 'unsupported-browser'
+      : !isSecureCtx
+      ? 'insecure-connection'
+      : isIOSInstalledPWA
+      ? 'ios-installed-pwa'
+      : null
   );
 
   const [isListening, setIsListening] = useState(false);
@@ -25,15 +43,14 @@ export function useSpeechRecognition({ lang = 'ja-JP' } = {}) {
   const latestTranscriptRef = useRef('');
   const latestAlternativesRef = useRef([]);
 
-  // Accumulates FINAL results across automatic session restarts — mobile
-  // Chrome frequently fires `onend` early even with continuous:true, and
-  // each new session's `event.results` starts from index 0 again, so
-  // without this the transcript from before a restart would be lost.
   const finalTranscriptRef = useRef('');
 
-  // false while we intend to keep listening (so `onend` should trigger an
-  // auto-restart); true once the caller explicitly calls stop().
   const manualStopRef = useRef(true);
+
+  const restartCountRef = useRef(0);
+  const restartWindowStartRef = useRef(0);
+  const MAX_RESTARTS_PER_WINDOW = 4;
+  const RESTART_WINDOW_MS = 5000;
 
   const startSession = useCallback(() => {
     const recognition = new SpeechRecognitionAPI();
@@ -79,6 +96,25 @@ export function useSpeechRecognition({ lang = 'ja-JP' } = {}) {
 
     recognition.onend = () => {
       if (!manualStopRef.current) {
+        const now = Date.now();
+        if (now - restartWindowStartRef.current > RESTART_WINDOW_MS) {
+          restartWindowStartRef.current = now;
+          restartCountRef.current = 0;
+        }
+        restartCountRef.current += 1;
+
+        if (restartCountRef.current > MAX_RESTARTS_PER_WINDOW) {
+          // Ending on its own this fast, this many times, means something
+          // is structurally rejecting start() (e.g. an environment our
+          // static isSupported check didn't catch) — stop looping.
+          manualStopRef.current = true;
+          setIsListening(false);
+          setError('recognition-restart-loop');
+          setTranscript(latestTranscriptRef.current);
+          setAlternatives(latestAlternativesRef.current);
+          return;
+        }
+
         // The session ended on its own (mobile quirk) but the user hasn't
         // stopped recording — start a fresh session and keep going. Final
         // results captured so far are preserved in finalTranscriptRef.
@@ -113,6 +149,8 @@ export function useSpeechRecognition({ lang = 'ja-JP' } = {}) {
     latestAlternativesRef.current = [];
     finalTranscriptRef.current = '';
     manualStopRef.current = false;
+    restartCountRef.current = 0;
+    restartWindowStartRef.current = Date.now();
 
     setIsListening(true);
     startSession();
