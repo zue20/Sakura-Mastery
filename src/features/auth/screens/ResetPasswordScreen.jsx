@@ -1,12 +1,59 @@
 import React, { useEffect, useState } from 'react';
-import { View, Text, TextInput, TouchableOpacity, StyleSheet } from 'react-native';
+import {
+  View,
+  Text,
+  TextInput,
+  TouchableOpacity,
+  StyleSheet,
+  ScrollView,
+  useWindowDimensions,
+} from 'react-native';
 import * as Linking from 'expo-linking';
 import { supabase } from '../../../api/supabaseClient';
 
+const COLORS = {
+  bg: '#FBF6F4',
+  card: '#FFFFFF',
+  pink: '#C65D7B',
+  pinkSoft: 'rgba(198,93,123,0.08)',
+  border: '#E8C4CE',
+  deep: '#3A2C33',
+  inkSoft: '#8A6B72',
+  error: '#B3261E',
+  success: '#4F7A5B',
+};
+
+function PasswordField({ label, value, onChangeText, visible, onToggleVisible, placeholder }) {
+  return (
+    <View style={styles.fieldWrap}>
+      <Text style={styles.fieldLabel}>{label}</Text>
+      <View style={styles.passwordRow}>
+        <TextInput
+          style={styles.passwordInput}
+          placeholder={placeholder}
+          placeholderTextColor="rgba(138,107,114,0.5)"
+          secureTextEntry={!visible}
+          value={value}
+          onChangeText={onChangeText}
+          autoCapitalize="none"
+        />
+        <TouchableOpacity onPress={onToggleVisible} style={styles.eyeBtn} hitSlop={8}>
+          <Text style={styles.eyeIcon}>{visible ? '🐵' : '🙈'}</Text>
+        </TouchableOpacity>
+      </View>
+    </View>
+  );
+}
+
 export default function ResetPasswordScreen({ navigation }) {
+  const { width } = useWindowDimensions();
+  const isWide = width >= 640;
+
   const [sessionReady, setSessionReady] = useState(false);
   const [password, setPassword] = useState('');
   const [confirmPassword, setConfirmPassword] = useState('');
+  const [showPassword, setShowPassword] = useState(false);
+  const [showConfirmPassword, setShowConfirmPassword] = useState(false);
   const [error, setError] = useState('');
   const [success, setSuccess] = useState(false);
   const [submitting, setSubmitting] = useState(false);
@@ -18,9 +65,6 @@ export default function ResetPasswordScreen({ navigation }) {
       const hashPart = url.includes('#') ? url.split('#')[1] : '';
       const params = new URLSearchParams(hashPart);
 
-      // Expired/invalid links arrive with error params instead of tokens —
-      // show the real reason (e.g. "Email link is invalid or has expired")
-      // rather than a generic message.
       const errorCode = params.get('error_code');
       const errorDescription = params.get('error_description');
       if (errorCode || errorDescription) {
@@ -89,113 +133,204 @@ export default function ResetPasswordScreen({ navigation }) {
     }, 1800);
   };
 
-  if (success) {
-    return (
-      <View style={styles.container}>
-        <Text style={styles.title}>Password updated 🌸</Text>
-        <Text style={styles.subtitle}>Taking you back to login...</Text>
-      </View>
-    );
-  }
-
-  if (!sessionReady) {
-    return (
-      <View style={styles.container}>
-        <Text style={styles.title}>
-          {error ? 'Link problem' : 'Verifying your reset link...'}
-        </Text>
-        {error ? <Text style={styles.error}>{error}</Text> : null}
-        {error ? (
-          <TouchableOpacity
-            style={styles.button}
-            onPress={() => navigation.navigate('ForgotPassword')}
-          >
-            <Text style={styles.buttonText}>Request a new link</Text>
-          </TouchableOpacity>
-        ) : null}
-      </View>
-    );
-  }
+  const cardWidth = isWide ? 440 : '100%';
 
   return (
-    <View style={styles.container}>
-      <Text style={styles.title}>Set a new password</Text>
+    <ScrollView
+      style={styles.root}
+      contentContainerStyle={styles.scrollContent}
+      keyboardShouldPersistTaps="handled"
+    >
+      <View style={styles.logoBar}>
+        <Text style={styles.logoText}>⛩️ SakuraMastery</Text>
+      </View>
 
-      <TextInput
-        style={styles.input}
-        placeholder="New password"
-        secureTextEntry
-        value={password}
-        onChangeText={setPassword}
-        autoCapitalize="none"
-      />
-      <TextInput
-        style={styles.input}
-        placeholder="Confirm new password"
-        secureTextEntry
-        value={confirmPassword}
-        onChangeText={setConfirmPassword}
-        autoCapitalize="none"
-      />
+      <View style={[styles.card, { width: cardWidth }]}>
+        {success ? (
+          <View style={styles.centerBlock}>
+            <Text style={styles.title}>Password updated 🌸</Text>
+            <Text style={styles.subtitle}>パスワードが更新されました</Text>
+            <Text style={styles.helperText}>Taking you back to login...</Text>
+          </View>
+        ) : !sessionReady ? (
+          <View style={styles.centerBlock}>
+            <Text style={styles.title}>{error ? 'Link problem' : 'Verifying your link...'}</Text>
+            <Text style={styles.subtitle}>
+              {error ? 'リンクに問題があります' : '確認しています...'}
+            </Text>
+            {error ? <Text style={styles.errorText}>{error}</Text> : null}
+            {error ? (
+              <TouchableOpacity
+                style={styles.primaryBtn}
+                onPress={() => navigation.navigate('ForgotPassword')}
+              >
+                <Text style={styles.primaryBtnText}>Request a new link</Text>
+              </TouchableOpacity>
+            ) : null}
+          </View>
+        ) : (
+          <>
+            <Text style={styles.title}>Set a New Password</Text>
+            <Text style={styles.subtitle}>新しいパスワードを設定</Text>
 
-      {error ? <Text style={styles.error}>{error}</Text> : null}
+            <PasswordField
+              label="New password"
+              value={password}
+              onChangeText={setPassword}
+              visible={showPassword}
+              onToggleVisible={() => setShowPassword((v) => !v)}
+              placeholder="Enter new password"
+            />
 
-      <TouchableOpacity
-        style={styles.button}
-        onPress={handleSubmit}
-        disabled={submitting}
-      >
-        <Text style={styles.buttonText}>
-          {submitting ? 'Updating...' : 'Update Password'}
-        </Text>
-      </TouchableOpacity>
-    </View>
+            <PasswordField
+              label="Confirm password"
+              value={confirmPassword}
+              onChangeText={setConfirmPassword}
+              visible={showConfirmPassword}
+              onToggleVisible={() => setShowConfirmPassword((v) => !v)}
+              placeholder="Re-enter new password"
+            />
+
+            {error ? <Text style={styles.errorText}>{error}</Text> : null}
+
+            <TouchableOpacity
+              style={[styles.primaryBtn, submitting && styles.primaryBtnDisabled]}
+              onPress={handleSubmit}
+              disabled={submitting}
+            >
+              <Text style={styles.primaryBtnText}>
+                {submitting ? 'Updating...' : 'Update Password'}
+              </Text>
+            </TouchableOpacity>
+          </>
+        )}
+      </View>
+    </ScrollView>
   );
 }
 
 const styles = StyleSheet.create({
-  container: {
+  root: {
     flex: 1,
-    backgroundColor: '#FBF6F4',
-    padding: 24,
-    justifyContent: 'center',
+    backgroundColor: COLORS.bg,
   },
+  scrollContent: {
+    flexGrow: 1,
+    alignItems: 'center',
+    justifyContent: 'center',
+    padding: 24,
+    paddingTop: 48,
+  },
+
+  logoBar: {
+    backgroundColor: COLORS.card,
+    borderRadius: 999,
+    paddingVertical: 10,
+    paddingHorizontal: 24,
+    marginBottom: 28,
+    shadowColor: '#3A2C33',
+    shadowOffset: { width: 0, height: 3 },
+    shadowOpacity: 0.08,
+    shadowRadius: 10,
+    elevation: 2,
+  },
+  logoText: {
+    fontSize: 16,
+    fontWeight: '700',
+    color: COLORS.deep,
+  },
+
+  card: {
+    maxWidth: 440,
+    backgroundColor: COLORS.card,
+    borderRadius: 24,
+    padding: 28,
+    shadowColor: '#3A2C33',
+    shadowOffset: { width: 0, height: 10 },
+    shadowOpacity: 0.1,
+    shadowRadius: 24,
+    elevation: 4,
+  },
+
+  centerBlock: {
+    alignItems: 'center',
+  },
+
   title: {
-    fontSize: 22,
-    fontWeight: '600',
-    color: '#C65D7B',
-    marginBottom: 8,
+    fontSize: 24,
+    fontWeight: '700',
+    color: COLORS.deep,
     textAlign: 'center',
   },
   subtitle: {
-    fontSize: 14,
-    color: '#8A6B72',
+    fontSize: 13,
+    color: COLORS.pink,
     textAlign: 'center',
-  },
-  input: {
-    borderWidth: 1,
-    borderColor: '#E8C4CE',
-    borderRadius: 10,
-    paddingHorizontal: 14,
-    paddingVertical: 12,
-    marginTop: 12,
-    backgroundColor: '#fff',
-  },
-  error: {
-    color: '#B3261E',
-    marginTop: 10,
-    textAlign: 'center',
-  },
-  button: {
-    backgroundColor: '#C65D7B',
-    borderRadius: 10,
-    paddingVertical: 14,
-    marginTop: 18,
-    alignItems: 'center',
-  },
-  buttonText: {
-    color: '#fff',
+    marginTop: 4,
+    marginBottom: 20,
     fontWeight: '600',
-    fontSize: 16,
+  },
+  helperText: {
+    fontSize: 13,
+    color: COLORS.inkSoft,
+    textAlign: 'center',
+    marginTop: 8,
+  },
+
+  fieldWrap: {
+    marginBottom: 16,
+  },
+  fieldLabel: {
+    fontSize: 13,
+    fontWeight: '600',
+    color: COLORS.deep,
+    marginBottom: 6,
+  },
+  passwordRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    backgroundColor: COLORS.pinkSoft,
+    borderWidth: 1,
+    borderColor: COLORS.border,
+    borderRadius: 12,
+    paddingHorizontal: 4,
+  },
+  passwordInput: {
+    flex: 1,
+    paddingHorizontal: 12,
+    paddingVertical: 13,
+    fontSize: 15,
+    color: COLORS.deep,
+  },
+  eyeBtn: {
+    paddingHorizontal: 10,
+    paddingVertical: 8,
+  },
+  eyeIcon: {
+    fontSize: 18,
+  },
+
+  errorText: {
+    color: COLORS.error,
+    fontSize: 13,
+    textAlign: 'center',
+    marginTop: 4,
+    marginBottom: 12,
+  },
+
+  primaryBtn: {
+    backgroundColor: COLORS.pink,
+    borderRadius: 14,
+    paddingVertical: 15,
+    alignItems: 'center',
+    marginTop: 8,
+  },
+  primaryBtnDisabled: {
+    opacity: 0.6,
+  },
+  primaryBtnText: {
+    color: '#fff',
+    fontWeight: '700',
+    fontSize: 15,
   },
 });
