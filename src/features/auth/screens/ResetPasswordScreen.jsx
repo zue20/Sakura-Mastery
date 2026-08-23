@@ -11,14 +11,27 @@ export default function ResetPasswordScreen({ navigation }) {
   const [success, setSuccess] = useState(false);
   const [submitting, setSubmitting] = useState(false);
 
-  // On mount, grab the raw URL that opened the app and pull the recovery
-  // tokens out of the fragment (#access_token=...&refresh_token=...&type=recovery)
   useEffect(() => {
     const parseAndSetSession = async (url) => {
       if (!url) return;
 
       const hashPart = url.includes('#') ? url.split('#')[1] : '';
       const params = new URLSearchParams(hashPart);
+
+      // Expired/invalid links arrive with error params instead of tokens —
+      // show the real reason (e.g. "Email link is invalid or has expired")
+      // rather than a generic message.
+      const errorCode = params.get('error_code');
+      const errorDescription = params.get('error_description');
+      if (errorCode || errorDescription) {
+        setError(
+          errorDescription
+            ? decodeURIComponent(errorDescription.replace(/\+/g, ' '))
+            : 'This reset link is invalid or has expired.'
+        );
+        return;
+      }
+
       const access_token = params.get('access_token');
       const refresh_token = params.get('refresh_token');
       const type = params.get('type');
@@ -92,6 +105,14 @@ export default function ResetPasswordScreen({ navigation }) {
           {error ? 'Link problem' : 'Verifying your reset link...'}
         </Text>
         {error ? <Text style={styles.error}>{error}</Text> : null}
+        {error ? (
+          <TouchableOpacity
+            style={styles.button}
+            onPress={() => navigation.navigate('ForgotPassword')}
+          >
+            <Text style={styles.buttonText}>Request a new link</Text>
+          </TouchableOpacity>
+        ) : null}
       </View>
     );
   }

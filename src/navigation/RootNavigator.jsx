@@ -10,7 +10,7 @@ import Spinner from '../components/Spinner';
 import MaintenanceScreen from '../screens/MaintenanceScreen';
 
 const authLinking = {
-  prefixes: ['http://localhost:8081'],
+  prefixes: ['http://localhost:8081', 'https://sakura-mastery.vercel.app'],
   config: {
     screens: {
       Login: 'login',
@@ -30,9 +30,14 @@ export default function RootNavigator() {
   // honored, even if the browser already has an existing logged-in session
   // from previous testing — otherwise the recovery screen is unreachable
   // and the user gets silently dropped onto the Dashboard/Admin panel
-  // instead of the password reset form.
+  // instead of the password reset form. Checking the PATH (not just a
+  // "type=recovery" hash) means this also correctly catches EXPIRED or
+  // invalid reset links, which arrive as an error hash instead —
+  // those still need to land on ResetPasswordScreen so it can show a
+  // proper "link expired" message, rather than silently falling through
+  // to the Admin/Learner dashboard.
   const isPasswordRecovery =
-    typeof window !== 'undefined' && window.location.hash.includes('type=recovery');
+    typeof window !== 'undefined' && window.location.pathname.includes('/reset-password');
 
   if (state.isLoading) {
     return <Spinner fullscreen label="Loading SakuraMastery..." />;

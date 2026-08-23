@@ -25,7 +25,7 @@ export async function logoutRequest() {
 
 export async function forgotPasswordRequest({ email }) {
   const { error } = await supabase.auth.resetPasswordForEmail(email, {
-    redirectTo: 'http://localhost:8081/reset-password',
+    redirectTo: 'https://sakura-mastery.vercel.app/reset-password',
   });
   if (error) throw new Error(error.message);
   return { success: true };
