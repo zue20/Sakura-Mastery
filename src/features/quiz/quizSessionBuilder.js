@@ -1,13 +1,13 @@
 // quizSessionBuilder.js
 
-export const MULTIPLE_CHOICE_TYPES = ['multipleChoice'];
+export const QUIZ_ELIGIBLE_TYPES = ['multipleChoice', 'dragdrop'];
 
 export const QUIZ_SESSION_CONFIG = {
-  total: 10,
+  total: 12,
 };
 
-export function filterForMultipleChoice(questions = []) {
-  return questions.filter((q) => MULTIPLE_CHOICE_TYPES.includes(q.type));
+export function filterForQuizEligible(questions = []) {
+  return questions.filter((q) => QUIZ_ELIGIBLE_TYPES.includes(q.type));
 }
 
 function shuffle(arr) {
@@ -24,19 +24,20 @@ function takeRandom(pool, count) {
 }
 
 /**
- * Builds a Quiz session from multiple-choice questions only — writing
- * types (kanjiWrite, kanaWrite) never enter this pool. Still exactly
- * `total` questions, still fully shuffled.
+ * Builds a Quiz session from multiple-choice AND drag-drop questions,
+ * mixed together and randomly ordered. Writing types (kanjiWrite,
+ * kanaWrite) still never enter this pool — those stay exclusive to
+ * WritingPracticeScreen.
  */
 export function buildQuizSession(allQuestions = [], config = QUIZ_SESSION_CONFIG) {
   const { total } = config;
 
-  const mcPool = filterForMultipleChoice(allQuestions);
-  const selected = takeRandom(mcPool, total);
+  const eligiblePool = filterForQuizEligible(allQuestions);
+  const selected = takeRandom(eligiblePool, total);
 
   if (selected.length < total) {
     console.warn(
-      `[quizSession] Only ${selected.length}/${total} multiple-choice questions available. Check Supabase content for this level/module.`
+      `[quizSession] Only ${selected.length}/${total} quiz-eligible questions available. Check Supabase content for this level/module.`
     );
   }
 

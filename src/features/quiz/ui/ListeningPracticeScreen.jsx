@@ -1,10 +1,11 @@
-
 import React, { useState, useEffect, useCallback, useMemo, useRef } from 'react';
-import { View, Text, Pressable, ScrollView, ActivityIndicator, StyleSheet } from 'react-native';
+import { View, Text, Pressable, ScrollView, ActivityIndicator, StyleSheet, Platform } from 'react-native';
 import * as Speech from 'expo-speech';
 import { useFetchQuestions } from '../hooks/useFetchQuestions';
 import PracticeCompleteScreen from './components/PracticeCompleteScreen';
 import { COLORS, FONTS } from '../../dashboard/theme';
+
+const CANCEL_SPEAK_GAP_MS = 50; // Safari drops speak() if it fires in the same tick as cancel()
 
 function HankoStamp({ character }) {
   return (
@@ -58,7 +59,9 @@ function ListeningPracticeScreenInner({ route, navigation, onRestart }) {
   const [slots, setSlots] = useState([]);
   const [bank, setBank] = useState([]);
   const [checked, setChecked] = useState(false);
+  const [audioError, setAudioError] = useState(null);
   const nextBlockId = useRef(0);
+  const gapTimeoutRef = useRef(null);
   const [showComplete, setShowComplete] = useState(false);
   const current = Array.isArray(questions) ? questions[index] : null;
   const total = Array.isArray(questions) ? questions.length : 0;
@@ -71,17 +74,68 @@ function ListeningPracticeScreenInner({ route, navigation, onRestart }) {
   useEffect(() => {
     setShowTranscript(false);
     setChecked(false);
+    setAudioError(null);
     setSlots(new Array(pieces.length).fill(null));
     setBank(
       shuffle(pieces).map((text) => ({ id: `blk-${nextBlockId.current++}`, text }))
     );
   }, [index, pieces]);
 
+  useEffect(() => {
+    return () => {
+      if (gapTimeoutRef.current) clearTimeout(gapTimeoutRef.current);
+      if (Platform.OS === 'web') {
+        if (typeof window !== 'undefined' && window.speechSynthesis) window.speechSynthesis.cancel();
+      } else {
+        Speech.stop();
+      }
+    };
+  }, []);
+
+  // Direct user gesture (onPress={playAudio} on the button below) — this
+  // part was already correct. What's new: Safari-safe cancel/speak gap,
+  // web-specific speechSynthesis path, and error surfaced to the UI
+  // instead of failing silently on repeat taps (a likely trigger for
+  // Safari's stuck-queue bug, since "replay" is core to this screen).
   const playAudio = useCallback(() => {
     if (!current?.audio?.text) return;
-    Speech.speak(current.audio.text, {
-      language: current.audio.lang ?? 'ja-JP',
+    setAudioError(null);
+
+    const text = current.audio.text;
+    const lang = current.audio.lang ?? 'ja-JP';
+
+    if (Platform.OS === 'web') {
+      if (typeof window === 'undefined' || !window.speechSynthesis) {
+        setAudioError('Audio is not supported in this browser.');
+        return;
+      }
+
+      window.speechSynthesis.cancel();
+      if (gapTimeoutRef.current) clearTimeout(gapTimeoutRef.current);
+
+      gapTimeoutRef.current = setTimeout(() => {
+        const utterance = new window.SpeechSynthesisUtterance(text);
+        utterance.lang = lang;
+        utterance.rate = 0.85;
+        utterance.onerror = (event) => {
+          if (event.error !== 'interrupted' && event.error !== 'canceled') {
+            setAudioError(
+              event.error === 'not-allowed'
+                ? 'Tap Play Audio again to enable sound.'
+                : 'Audio playback failed. Please try again.'
+            );
+          }
+        };
+        window.speechSynthesis.speak(utterance);
+      }, CANCEL_SPEAK_GAP_MS);
+      return;
+    }
+
+    Speech.stop();
+    Speech.speak(text, {
+      language: lang,
       rate: 0.85,
+      onError: () => setAudioError('Audio playback failed. Please try again.'),
     });
   }, [current]);
 
@@ -180,6 +234,7 @@ function ListeningPracticeScreenInner({ route, navigation, onRestart }) {
           <Text style={styles.playBtnText}>🎶 Play Audio</Text>
         </Pressable>
         <Text style={styles.playHint}>Tap again anytime to replay</Text>
+        {!!audioError && <Text style={styles.audioErrorText}>{audioError}</Text>}
 
         <View style={styles.divider} />
 
@@ -334,6 +389,14 @@ const styles = StyleSheet.create({
     color: COLORS.inkSoft,
     marginTop: 4,
     marginBottom: 4,
+  },
+  audioErrorText: {
+    alignSelf: 'center',
+    fontFamily: FONTS.body,
+    fontSize: 11,
+    color: COLORS.error,
+    marginBottom: 4,
+    textAlign: 'center',
   },
   divider: {
     height: 1,

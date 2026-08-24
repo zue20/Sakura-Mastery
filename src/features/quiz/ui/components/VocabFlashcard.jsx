@@ -1,5 +1,5 @@
-import React, { useEffect, useRef } from 'react';
-import { View, Text, Image, Pressable, StyleSheet } from 'react-native';
+import React, { useRef, useCallback, useEffect } from 'react';
+import { View, Text, Image, Pressable, StyleSheet, Platform } from 'react-native';
 import Animated, {
   useSharedValue,
   useAnimatedStyle,
@@ -11,22 +11,67 @@ import { COLORS, FONTS } from '../../../dashboard/theme';
 
 const CARD_WIDTH = 340;
 const CARD_HEIGHT = 320;
+const CANCEL_SPEAK_GAP_MS = 50; // Safari drops speak() if it fires in the same tick as cancel()
 
 export default function VocabFlashcard({ front, back, imageUrl, audio, isFlipped, onFlip, questionId }) {
   const rotation = useSharedValue(isFlipped ? 180 : 0);
-  const hasAutoPlayed = useRef(false);
+  const hasAutoPlayedRef = useRef(false);
+  const gapTimeoutRef = useRef(null);
 
+  // Only handles the flip ANIMATION now — speech was moved out of here
+  // and into handleCardPress below, since firing speak() from inside a
+  // useEffect (triggered by state change, not a direct tap) breaks the
+  // "user gesture" chain that Safari/iOS requires for speechSynthesis.
   useEffect(() => {
     rotation.value = withTiming(isFlipped ? 180 : 0, { duration: 400 });
-
-    if (isFlipped && audio?.text && !hasAutoPlayed.current) {
-      hasAutoPlayed.current = true;
-      Speech.speak(audio.text, { language: audio.lang ?? 'ja-JP', rate: 0.85 });
-    }
     if (!isFlipped) {
-      hasAutoPlayed.current = false;
+      hasAutoPlayedRef.current = false;
     }
   }, [isFlipped]);
+
+  useEffect(() => {
+    return () => {
+      if (gapTimeoutRef.current) clearTimeout(gapTimeoutRef.current);
+      if (Platform.OS === 'web') {
+        if (typeof window !== 'undefined' && window.speechSynthesis) window.speechSynthesis.cancel();
+      } else {
+        Speech.stop();
+      }
+    };
+  }, []);
+
+  const speakNow = useCallback((text, lang) => {
+    if (Platform.OS === 'web') {
+      if (typeof window === 'undefined' || !window.speechSynthesis) return;
+
+      window.speechSynthesis.cancel();
+      if (gapTimeoutRef.current) clearTimeout(gapTimeoutRef.current);
+
+      gapTimeoutRef.current = setTimeout(() => {
+        const utterance = new window.SpeechSynthesisUtterance(text);
+        utterance.lang = lang ?? 'ja-JP';
+        utterance.rate = 0.85;
+        window.speechSynthesis.speak(utterance);
+      }, CANCEL_SPEAK_GAP_MS);
+      return;
+    }
+
+    Speech.stop();
+    Speech.speak(text, { language: lang ?? 'ja-JP', rate: 0.85 });
+  }, []);
+
+  // The actual tap handler — this is the real user gesture. Flip state
+  // update AND speech both originate from here directly, synchronously,
+  // rather than speech being a side-effect of state changing.
+  const handleCardPress = useCallback(() => {
+    const nextIsFlipped = !isFlipped;
+    onFlip(nextIsFlipped);
+
+    if (nextIsFlipped && audio?.text && !hasAutoPlayedRef.current) {
+      hasAutoPlayedRef.current = true;
+      speakNow(audio.text, audio.lang);
+    }
+  }, [isFlipped, onFlip, audio, speakNow]);
 
   const frontStyle = useAnimatedStyle(() => {
     const rotateY = `${rotation.value}deg`;
@@ -42,7 +87,7 @@ export default function VocabFlashcard({ front, back, imageUrl, audio, isFlipped
 
   return (
     <View style={styles.outerWrap}>
-      <Pressable onPress={() => onFlip(!isFlipped)} style={styles.cardWrap}>
+      <Pressable onPress={handleCardPress} style={styles.cardWrap}>
         <Animated.View style={[styles.face, frontStyle]}>
           <Text style={styles.label}>Vocabulary</Text>
           {!!imageUrl && <Image source={{ uri: imageUrl }} style={styles.image} resizeMode="contain" />}
