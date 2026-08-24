@@ -59,7 +59,9 @@ function checkAnswer(question, workingAnswer) {
     return Math.abs(drawn - expected) <= 1;
   }
 
-  if (question.type === QuestionType.SPEAKING) {
+    if (question.type === QuestionType.SPEAKING) {
+    
+    if (workingAnswer?.accuracy === null) return true;
     return (workingAnswer?.accuracy ?? 0) >= 70;
   }
 

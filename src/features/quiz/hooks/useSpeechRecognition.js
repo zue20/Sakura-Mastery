@@ -1,4 +1,3 @@
-
 import { useState, useRef, useCallback, useEffect } from 'react';
 
 const SpeechRecognitionAPI =
@@ -7,7 +6,6 @@ const SpeechRecognitionAPI =
     : null;
 
 const isSecureCtx = typeof window !== 'undefined' ? window.isSecureContext : true;
-
 
 const isIOS =
   typeof navigator !== 'undefined' && /iPhone|iPad|iPod/i.test(navigator.userAgent);
@@ -18,6 +16,11 @@ const isStandalonePWA =
     window.matchMedia?.('(display-mode: standalone)').matches);
 
 const isIOSInstalledPWA = isIOS && isStandalonePWA;
+
+// Safari needs a beat between the mic permission being granted and the
+// recognizer actually capturing audio — starting immediately is a known
+// cause of the first attempt silently missing the first word or two.
+const IOS_MIC_WARMUP_MS = 350;
 
 export function useSpeechRecognition({ lang = 'ja-JP' } = {}) {
   const hasApi = !!SpeechRecognitionAPI;
@@ -42,9 +45,7 @@ export function useSpeechRecognition({ lang = 'ja-JP' } = {}) {
   const recognitionRef = useRef(null);
   const latestTranscriptRef = useRef('');
   const latestAlternativesRef = useRef([]);
-
   const finalTranscriptRef = useRef('');
-
   const manualStopRef = useRef(true);
 
   const restartCountRef = useRef(0);
@@ -52,10 +53,20 @@ export function useSpeechRecognition({ lang = 'ja-JP' } = {}) {
   const MAX_RESTARTS_PER_WINDOW = 4;
   const RESTART_WINDOW_MS = 5000;
 
+  // Tracks whether ANY restart in the current session ever produced a
+  // final transcript — if the loop trips and this is still false, it's
+  // not a flaky-mobile-ending problem, it's the recognizer never
+  // capturing anything at all (Siri disabled, or the dictation language
+  // pack for `lang` isn't installed on-device).
+  const everGotResultRef = useRef(false);
+
   const startSession = useCallback(() => {
     const recognition = new SpeechRecognitionAPI();
     recognition.lang = lang;
-    recognition.continuous = true;
+    // Continuous mode is the less reliable path on WebKit — single-shot
+    // sessions chained via onend (below) behave the same from the
+    // caller's perspective but fail less often on iOS/iPadOS.
+    recognition.continuous = !isIOS;
     recognition.interimResults = true;
     recognition.maxAlternatives = 3;
 
@@ -66,8 +77,10 @@ export function useSpeechRecognition({ lang = 'ja-JP' } = {}) {
         const text = result?.[0]?.transcript ?? '';
         if (result.isFinal) {
           finalTranscriptRef.current += text;
+          if (text.trim()) everGotResultRef.current = true;
         } else {
           interim += text;
+          if (text.trim()) everGotResultRef.current = true;
         }
       }
 
@@ -87,8 +100,8 @@ export function useSpeechRecognition({ lang = 'ja-JP' } = {}) {
     };
 
     recognition.onerror = (event) => {
-      // 'no-speech' fires constantly on mobile during brief pauses between
-      // words — it is not fatal, `onend` (below) decides whether to restart.
+      // 'no-speech' fires constantly on mobile during brief pauses
+      // between words — not fatal, onend (below) decides on restarting.
       if (event.error !== 'no-speech') {
         setError(event.error ?? 'recognition-error');
       }
@@ -104,20 +117,20 @@ export function useSpeechRecognition({ lang = 'ja-JP' } = {}) {
         restartCountRef.current += 1;
 
         if (restartCountRef.current > MAX_RESTARTS_PER_WINDOW) {
-          // Ending on its own this fast, this many times, means something
-          // is structurally rejecting start() (e.g. an environment our
-          // static isSupported check didn't catch) — stop looping.
           manualStopRef.current = true;
           setIsListening(false);
-          setError('recognition-restart-loop');
+          // Distinguish "kept restarting but never once captured audio"
+          // from a generic flaky loop — the former points at a device
+          // setting (Siri off, or `lang`'s dictation pack not
+          // installed), not a code bug, and needs different UI copy.
+          setError(
+            everGotResultRef.current ? 'recognition-restart-loop' : 'recognition-never-captured'
+          );
           setTranscript(latestTranscriptRef.current);
           setAlternatives(latestAlternativesRef.current);
           return;
         }
 
-        // The session ended on its own (mobile quirk) but the user hasn't
-        // stopped recording — start a fresh session and keep going. Final
-        // results captured so far are preserved in finalTranscriptRef.
         startSession();
         return;
       }
@@ -137,10 +150,10 @@ export function useSpeechRecognition({ lang = 'ja-JP' } = {}) {
     };
   }, []);
 
-  const start = useCallback(() => {
+  const start = useCallback(async () => {
     if (!isSupported) {
       setError(unavailableReason ?? 'unsupported');
-      return;
+      return false;
     }
     setTranscript('');
     setAlternatives([]);
@@ -148,12 +161,30 @@ export function useSpeechRecognition({ lang = 'ja-JP' } = {}) {
     latestTranscriptRef.current = '';
     latestAlternativesRef.current = [];
     finalTranscriptRef.current = '';
+    everGotResultRef.current = false;
     manualStopRef.current = false;
     restartCountRef.current = 0;
     restartWindowStartRef.current = Date.now();
 
     setIsListening(true);
+
+    if (isIOS && navigator.mediaDevices?.getUserMedia) {
+      try {
+        // Requesting the stream directly ensures the permission prompt
+        // (and the mic actually powering up) happens before the
+        // recognizer starts, rather than racing it.
+        const stream = await navigator.mediaDevices.getUserMedia({ audio: true });
+        stream.getTracks().forEach((track) => track.stop());
+        await new Promise((resolve) => setTimeout(resolve, IOS_MIC_WARMUP_MS));
+      } catch (err) {
+        setIsListening(false);
+        setError('mic-permission-denied');
+        return false;
+      }
+    }
+
     startSession();
+    return true;
   }, [isSupported, unavailableReason, startSession]);
 
   const stop = useCallback(() => {
@@ -168,7 +199,18 @@ export function useSpeechRecognition({ lang = 'ja-JP' } = {}) {
     latestTranscriptRef.current = '';
     latestAlternativesRef.current = [];
     finalTranscriptRef.current = '';
+    everGotResultRef.current = false;
   }, []);
 
-  return { isSupported, unavailableReason, isListening, transcript, alternatives, error, start, stop, reset };
+  return {
+    isSupported,
+    unavailableReason,
+    isListening,
+    transcript,
+    alternatives,
+    error,
+    start,
+    stop,
+    reset,
+  };
 }

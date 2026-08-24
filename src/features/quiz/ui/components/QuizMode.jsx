@@ -7,12 +7,29 @@ import { LiveWaveform } from '../../../shadowing/ui/LiveWaveform';
 import { useSpeechRecognition } from '../../hooks/useSpeechRecognition';
 import { scoreAccuracy } from '../../utils/textSimilarity';
 import { COLORS, FONTS } from '../../../dashboard/theme';
+import DeviceWarningBanner from '../../../../components/DeviceWarningBanner';
+import { isIPad } from '../../../../utils/deviceDetection';
 
 const QUIZ_DURATION = 30; // seconds
 const PASS_THRESHOLD = 70; // must match useQuizQuestions.js checkAnswer
 
-const isMobileWeb =
-  typeof navigator !== 'undefined' && /Android|iPhone|iPad|iPod/i.test(navigator.userAgent);
+// Errors that mean "the recognizer never actually captured audio" —
+// a device setting (Siri off, or this language's dictation pack not
+// installed) rather than the learner mis-speaking. These should never
+// be scored as a hard fail.
+const DEVICE_ISSUE_ERRORS = new Set(['recognition-never-captured', 'mic-permission-denied']);
+
+function getSpeechDeviceMessage(errorCode) {
+  if (errorCode === 'mic-permission-denied') {
+    return "Microphone access was blocked. Check your browser's site settings and allow the microphone, then try again.";
+  }
+  if (errorCode === 'recognition-never-captured') {
+    return isIPad()
+      ? 'iPad speech recognition limitation. Please check Settings → General → Keyboard → Dictation Languages for Japanese.'
+      : 'Speech recognition limitation on this device. Please check Settings → Siri and Dictation Languages for Japanese.';
+  }
+  return null;
+}
 
 export default function QuizMode({ question, workingAnswer, onChange, disabled }) {
   const data = question.data ?? question;
@@ -21,10 +38,13 @@ export default function QuizMode({ question, workingAnswer, onChange, disabled }
   const { status, audioUri, stream, metering, start, stop, reset } = useAudioRecorder();
   const speech = useSpeechRecognition({ lang });
 
-  // Was: isMobileWeb && speech.isSupported (mobile-only).
-  // Now: speech.isSupported (mobile unaffected — was already true there;
-  // PC now gets the same protection since it needs it too).
   const skipAudioRecording = speech.isSupported;
+
+  // "Supported" per feature detection can still fail to ever capture
+  // anything on a misconfigured iOS device — treat that the same as
+  // unsupported for scoring and messaging purposes.
+  const speechDeviceIssue = DEVICE_ISSUE_ERRORS.has(speech.error);
+  const speechEffectivelySupported = speech.isSupported && !speechDeviceIssue;
 
   const [secondsLeft, setSecondsLeft] = useState(QUIZ_DURATION);
   const [phase, setPhase] = useState('ready'); // ready | recording | processing | scored
@@ -59,7 +79,6 @@ export default function QuizMode({ question, workingAnswer, onChange, disabled }
     pulseAnim.setValue(1);
   }, [phase, pulseAnim]);
 
-  // Reset everything (including any stale scored answer) when the question changes.
   useEffect(() => {
     reset();
     speech.reset();
@@ -71,22 +90,33 @@ export default function QuizMode({ question, workingAnswer, onChange, disabled }
 
   useEffect(() => clearTimer, [clearTimer]);
 
-  const finishAndScore = useCallback((finalTranscript, altList = []) => {
-    clearTimer();
-    setPhase('scored');
+  const finishAndScore = useCallback(
+    (finalTranscript, altList = []) => {
+      clearTimer();
+      setPhase('scored');
 
-    let bestTranscript = finalTranscript;
-    let bestAcc = scoreAccuracy(finalTranscript, data.targetText);
-    for (const alt of altList) {
-      const acc = scoreAccuracy(alt, data.targetText);
-      if (acc > bestAcc) {
-        bestAcc = acc;
-        bestTranscript = alt;
+      // Device-side failure (or genuinely unsupported): record the
+      // attempt without penalizing — accuracy stays null, which
+      // useQuizQuestions.js's checkAnswer treats as an automatic pass.
+      if (!speechEffectivelySupported) {
+        onChange({ attempted: true, transcript: finalTranscript || '', accuracy: null });
+        return;
       }
-    }
 
-    onChange({ attempted: true, transcript: bestTranscript, accuracy: bestAcc });
-  }, [clearTimer, data.targetText, onChange]);
+      let bestTranscript = finalTranscript;
+      let bestAcc = scoreAccuracy(finalTranscript, data.targetText);
+      for (const alt of altList) {
+        const acc = scoreAccuracy(alt, data.targetText);
+        if (acc > bestAcc) {
+          bestAcc = acc;
+          bestTranscript = alt;
+        }
+      }
+
+      onChange({ attempted: true, transcript: bestTranscript, accuracy: bestAcc });
+    },
+    [clearTimer, data.targetText, onChange, speechEffectivelySupported]
+  );
 
   const handleStop = useCallback(() => {
     setPhase('processing');
@@ -101,13 +131,11 @@ export default function QuizMode({ question, workingAnswer, onChange, disabled }
   }, [phase, speech.isListening, speech.transcript, speech.alternatives, isRecording, finishAndScore]);
 
   useEffect(() => {
-    if (phase === 'processing' && !speech.isSupported && !isRecording) {
+    if (phase === 'processing' && !speechEffectivelySupported && !isRecording) {
       finishAndScore('');
     }
-  }, [phase, isRecording, speech.isSupported, finishAndScore]);
+  }, [phase, isRecording, speechEffectivelySupported, finishAndScore]);
 
-  // Safety net: never leave the user stuck on "Processing" — if recognition
-  // is supported but returns nothing within 4s of stopping, score as ungraded.
   useEffect(() => {
     if (phase !== 'processing' || isRecording) return;
     const fallback = setTimeout(() => {
@@ -116,13 +144,22 @@ export default function QuizMode({ question, workingAnswer, onChange, disabled }
     return () => clearTimeout(fallback);
   }, [phase, isRecording, speech.transcript, finishAndScore]);
 
-  const handleStart = useCallback(() => {
+  const handleStart = useCallback(async () => {
     if (isRequesting || hasScored) return;
     setPhase('recording');
     setSecondsLeft(QUIZ_DURATION);
 
     if (!skipAudioRecording) start();
-    if (speech.isSupported) speech.start();
+
+    if (speech.isSupported) {
+      const started = await speech.start();
+      if (!started) {
+        // Mic permission denied (or similar) before recognition could
+        // even begin — don't strand the UI on "Listening…" forever.
+        handleStop();
+        return;
+      }
+    }
 
     timerRef.current = setInterval(() => {
       setSecondsLeft((s) => {
@@ -146,6 +183,7 @@ export default function QuizMode({ question, workingAnswer, onChange, disabled }
   }, [reset, speech, clearTimer, onChange]);
 
   const isPass = accuracy !== null && accuracy >= PASS_THRESHOLD;
+  const isUngraded = hasScored && accuracy === null;
 
   const recordLabel = isRequesting
     ? 'Requesting mic access…'
@@ -167,9 +205,7 @@ export default function QuizMode({ question, workingAnswer, onChange, disabled }
         <Image source={{ uri: data.imageUrl }} style={styles.illustration} resizeMode="contain" />
       )}
 
-      {!!data.translation && (
-        <Text style={styles.translationBelowImage}>{data.translation}</Text>
-      )}
+      {!!data.translation && <Text style={styles.translationBelowImage}>{data.translation}</Text>}
 
       <TTSAudioRow text={data.audio?.text ?? data.targetText} lang={lang} />
 
@@ -217,11 +253,13 @@ export default function QuizMode({ question, workingAnswer, onChange, disabled }
           </Pressable>
           <Text style={styles.hint}>{recordLabel}</Text>
           {!speech.isSupported && (
-            <Text style={styles.unsupportedHint}>
-              {speech.unavailableReason === 'insecure-connection'
-                ? 'Speech scoring needs a secure (https) connection on this network — your recording is still saved, just without a score.'
-                : "Speech recognition isn't available on this device — your attempt will still be recorded."}
-            </Text>
+            <DeviceWarningBanner
+              message={
+                speech.unavailableReason === 'insecure-connection'
+                  ? 'Speech scoring needs a secure (https) connection on this network — your recording is still saved, just without a score.'
+                  : "Speech recognition isn't available on this device — your attempt will still be recorded."
+              }
+            />
           )}
         </>
       )}
@@ -230,13 +268,21 @@ export default function QuizMode({ question, workingAnswer, onChange, disabled }
         <View style={styles.resultWrap}>
           {!skipAudioRecording && audioUri && <AudioRow uri={audioUri} label="Your recording" />}
 
-          {speech.isSupported && (
+          {speechEffectivelySupported && (
             <Text style={styles.transcriptText}>
               You said: <Text style={styles.transcriptQuoted}>{transcript || '(nothing recognized)'}</Text>
             </Text>
           )}
 
-                    {/* TEMP DEBUG — remove once the scoring issue is confirmed fixed */}
+          {speechDeviceIssue && (
+            <DeviceWarningBanner
+              message={getSpeechDeviceMessage(speech.error)}
+              onPress={handleRetry}
+              actionLabel="Try again"
+            />
+          )}
+
+          {/* TEMP DEBUG — remove once the scoring issue is confirmed fixed */}
           <View style={styles.debugCard}>
             <Text style={styles.debugLabel}>🌸 Debug</Text>
             <View style={styles.debugRow}>
@@ -249,13 +295,25 @@ export default function QuizMode({ question, workingAnswer, onChange, disabled }
             </View>
             <View style={styles.debugRow}>
               <Text style={styles.debugKey}>accuracy</Text>
-              <Text style={[styles.debugValue, styles.debugAccuracy]}>{accuracy}%</Text>
+              <Text style={[styles.debugValue, styles.debugAccuracy]}>
+                {accuracy === null ? 'ungraded' : `${accuracy}%`}
+              </Text>
+            </View>
+            <View style={styles.debugRow}>
+              <Text style={styles.debugKey}>speech.error</Text>
+              <Text style={styles.debugValue}>{JSON.stringify(speech.error)}</Text>
             </View>
           </View>
           {/* END TEMP DEBUG */}
-          <View style={[styles.scoreBadge, isPass ? styles.scoreBadgePass : styles.scoreBadgeFail]}>
+
+          <View
+            style={[
+              styles.scoreBadge,
+              isUngraded ? styles.scoreBadgeUngraded : isPass ? styles.scoreBadgePass : styles.scoreBadgeFail,
+            ]}
+          >
             <Text style={styles.scoreText}>
-              {speech.isSupported ? `${accuracy}% Match` : 'Recorded'}
+              {isUngraded ? 'Recorded' : `${accuracy}% Match`}
             </Text>
           </View>
 
@@ -270,8 +328,12 @@ export default function QuizMode({ question, workingAnswer, onChange, disabled }
 
 const styles = StyleSheet.create({
   scenarioBadge: {
-    alignSelf: 'center', backgroundColor: 'rgba(216,162,90,0.16)',
-    borderRadius: 999, paddingVertical: 5, paddingHorizontal: 14, marginBottom: 12,
+    alignSelf: 'center',
+    backgroundColor: 'rgba(216,162,90,0.16)',
+    borderRadius: 999,
+    paddingVertical: 5,
+    paddingHorizontal: 14,
+    marginBottom: 12,
   },
   scenarioBadgeText: { fontFamily: FONTS.body, fontSize: 12, fontWeight: '700', color: COLORS.gold, letterSpacing: 0.4 },
 
@@ -298,12 +360,19 @@ const styles = StyleSheet.create({
   timerLabelUrgent: { color: COLORS.error, fontWeight: '700' },
 
   waveformWrap: { marginVertical: 12, minHeight: 48 },
-  recordBtn: { width: 68, height: 68, borderRadius: 34, backgroundColor: COLORS.error ?? '#C0392B', alignSelf: 'center', alignItems: 'center', justifyContent: 'center' },
+  recordBtn: {
+    width: 68,
+    height: 68,
+    borderRadius: 34,
+    backgroundColor: COLORS.error ?? '#C0392B',
+    alignSelf: 'center',
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
   recordBtnActive: { backgroundColor: '#8E2A20' },
   recordBtnProcessing: { backgroundColor: COLORS.gold ?? '#D8A25A' },
   recordIcon: { fontSize: 22, color: '#fff', fontWeight: '700' },
   hint: { textAlign: 'center', fontFamily: FONTS.body, fontSize: 12, color: COLORS.inkSoft, marginTop: 8 },
-  unsupportedHint: { textAlign: 'center', fontFamily: FONTS.body, fontSize: 11, color: COLORS.inkSoft, marginTop: 6, fontStyle: 'italic' },
 
   resultWrap: { alignItems: 'center', marginTop: 4 },
   transcriptText: { fontFamily: FONTS.body, fontSize: 13, color: COLORS.inkSoft, marginTop: 10, textAlign: 'center' },
@@ -312,12 +381,13 @@ const styles = StyleSheet.create({
   scoreBadge: { marginTop: 14, borderRadius: 16, paddingVertical: 14, paddingHorizontal: 24, alignItems: 'center', minWidth: 180 },
   scoreBadgePass: { backgroundColor: 'rgba(127,169,138,0.18)' },
   scoreBadgeFail: { backgroundColor: 'rgba(192,57,43,0.1)' },
+  scoreBadgeUngraded: { backgroundColor: 'rgba(198,93,123,0.08)' },
   scoreText: { fontFamily: FONTS.display, fontSize: 22, fontWeight: '700', color: COLORS.deep },
   scoreVerdict: { fontFamily: FONTS.body, fontSize: 13, color: COLORS.inkSoft, marginTop: 2 },
 
   retryBtn: { marginTop: 12, paddingVertical: 6, paddingHorizontal: 14 },
   retryBtnText: { fontFamily: FONTS.body, fontSize: 13, color: COLORS.plum, fontWeight: '700' },
-    debugCard: {
+  debugCard: {
     marginTop: 12,
     width: '100%',
     backgroundColor: 'rgba(198,93,123,0.06)',
@@ -326,14 +396,7 @@ const styles = StyleSheet.create({
     borderRadius: 14,
     padding: 12,
   },
-  debugLabel: {
-    fontFamily: FONTS.body,
-    fontSize: 11,
-    fontWeight: '700',
-    color: COLORS.pink,
-    marginBottom: 6,
-    letterSpacing: 0.4,
-  },
+  debugLabel: { fontFamily: FONTS.body, fontSize: 11, fontWeight: '700', color: COLORS.pink, marginBottom: 6, letterSpacing: 0.4 },
   debugRow: {
     flexDirection: 'row',
     justifyContent: 'space-between',
@@ -341,22 +404,7 @@ const styles = StyleSheet.create({
     borderTopWidth: 1,
     borderTopColor: 'rgba(198,93,123,0.1)',
   },
-  debugKey: {
-    fontFamily: FONTS.body,
-    fontSize: 10,
-    color: COLORS.inkSoft,
-    fontWeight: '600',
-    width: 70,
-  },
-  debugValue: {
-    fontFamily: FONTS.body,
-    fontSize: 10,
-    color: COLORS.deep,
-    flex: 1,
-    textAlign: 'right',
-  },
-  debugAccuracy: {
-    fontWeight: '700',
-    color: COLORS.plum,
-  },
+  debugKey: { fontFamily: FONTS.body, fontSize: 10, color: COLORS.inkSoft, fontWeight: '600', width: 70 },
+  debugValue: { fontFamily: FONTS.body, fontSize: 10, color: COLORS.deep, flex: 1, textAlign: 'right' },
+  debugAccuracy: { fontWeight: '700', color: COLORS.plum },
 });
