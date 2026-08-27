@@ -1,4 +1,4 @@
-import { convertKanjiToKana } from './kanaDictionary';
+import { toHiraganaReading } from './kanjiReading';
 
 // Normalized Levenshtein distance -> 0-100 accuracy score.
 function levenshteinDistance(a, b) {
@@ -27,16 +27,25 @@ function levenshteinDistance(a, b) {
 }
 
 function normalize(str) {
-  const kanaConverted = convertKanjiToKana((str ?? '').toString());
-  return kanaConverted
+  return (str ?? '')
+    .toString()
     .trim()
     .toLowerCase()
     .replace(/[\s。、！？「」『』・\.\,\!\?]/g, '');
 }
 
-export function scoreAccuracy(spoken, target) {
-  const a = normalize(spoken);
-  const b = normalize(target);
+// Both spoken and target text are converted to their hiragana READING
+// via kuromoji before comparing — so kanji-vs-kana spelling differences
+// (e.g. 音楽 vs おんがく) never affect the score, only actual
+// pronunciation does.
+export async function scoreAccuracy(spoken, target) {
+  const [spokenReading, targetReading] = await Promise.all([
+    toHiraganaReading(spoken),
+    toHiraganaReading(target),
+  ]);
+
+  const a = normalize(spokenReading);
+  const b = normalize(targetReading);
   if (!a || !b) return 0;
 
   const distance = levenshteinDistance(a, b);

@@ -6,17 +6,16 @@ import { TTSAudioRow } from '../../../shadowing/ui/TTSAudioRow';
 import { LiveWaveform } from '../../../shadowing/ui/LiveWaveform';
 import { useSpeechRecognition } from '../../hooks/useSpeechRecognition';
 import { scoreAccuracy } from '../../utils/textSimilarity';
+import { warmupReadingEngine } from '../../utils/kanjiReading';
 import { COLORS, FONTS } from '../../../dashboard/theme';
 import DeviceWarningBanner from '../../../../components/DeviceWarningBanner';
 import { isIPad } from '../../../../utils/deviceDetection';
 
 const QUIZ_DURATION = 30; // seconds
-const PASS_THRESHOLD = 70; // must match useQuizQuestions.js checkAnswer
+const PASS_THRESHOLD = 80; // must match useQuizQuestions.js checkAnswer
+const DEFAULT_IMAGE_ASPECT_RATIO = 16 / 9; // used until the real image dimensions load
+const MAX_ILLUSTRATION_HEIGHT = 160; // NEW: caps the image so the whole quiz fits without scrolling
 
-// Errors that mean "the recognizer never actually captured audio" —
-// a device setting (Siri off, or this language's dictation pack not
-// installed) rather than the learner mis-speaking. These should never
-// be scored as a hard fail.
 const DEVICE_ISSUE_ERRORS = new Set(['recognition-never-captured', 'mic-permission-denied']);
 
 function getSpeechDeviceMessage(errorCode) {
@@ -40,14 +39,17 @@ export default function QuizMode({ question, workingAnswer, onChange, disabled }
 
   const skipAudioRecording = speech.isSupported;
 
-  // "Supported" per feature detection can still fail to ever capture
-  // anything on a misconfigured iOS device — treat that the same as
-  // unsupported for scoring and messaging purposes.
   const speechDeviceIssue = DEVICE_ISSUE_ERRORS.has(speech.error);
   const speechEffectivelySupported = speech.isSupported && !speechDeviceIssue;
 
   const [secondsLeft, setSecondsLeft] = useState(QUIZ_DURATION);
   const [phase, setPhase] = useState('ready'); // ready | recording | processing | scored
+  // Box matches each image's real proportions instead of a fixed height, so
+  // resizeMode="contain" shows the whole image with no crop. Height is also
+  // capped by MAX_ILLUSTRATION_HEIGHT so a tall/portrait image can't push
+  // the record button below the fold. Resets to the default per question
+  // until Image.getSize resolves the real ratio for that question's image.
+  const [imageAspectRatio, setImageAspectRatio] = useState(DEFAULT_IMAGE_ASPECT_RATIO);
   const timerRef = useRef(null);
   const pulseAnim = useRef(new Animated.Value(1)).current;
 
@@ -64,6 +66,27 @@ export default function QuizMode({ question, workingAnswer, onChange, disabled }
       timerRef.current = null;
     }
   }, []);
+
+  useEffect(() => {
+    warmupReadingEngine();
+  }, []);
+
+  // Looks up this question's real image dimensions so the box can be sized
+  // to match — falls back silently to the default ratio on error.
+  useEffect(() => {
+    if (!data.imageUrl) return undefined;
+    let cancelled = false;
+    Image.getSize(
+      data.imageUrl,
+      (width, height) => {
+        if (!cancelled && width && height) setImageAspectRatio(width / height);
+      },
+      () => {} // leave it at the default ratio if dimensions can't be read
+    );
+    return () => {
+      cancelled = true;
+    };
+  }, [data.imageUrl]);
 
   useEffect(() => {
     if (phase === 'recording') {
@@ -85,35 +108,38 @@ export default function QuizMode({ question, workingAnswer, onChange, disabled }
     clearTimer();
     setSecondsLeft(QUIZ_DURATION);
     setPhase('ready');
+    setImageAspectRatio(DEFAULT_IMAGE_ASPECT_RATIO); // reset per question, same as the other fields below
     onChange(null);
   }, [question.id]); // eslint-disable-line react-hooks/exhaustive-deps
 
   useEffect(() => clearTimer, [clearTimer]);
 
   const finishAndScore = useCallback(
-    (finalTranscript, altList = []) => {
+    async (finalTranscript, altList = []) => {
       clearTimer();
-      setPhase('scored');
 
-      // Device-side failure (or genuinely unsupported): record the
-      // attempt without penalizing — accuracy stays null, which
-      // useQuizQuestions.js's checkAnswer treats as an automatic pass.
       if (!speechEffectivelySupported) {
+        setPhase('scored');
         onChange({ attempted: true, transcript: finalTranscript || '', accuracy: null });
         return;
       }
 
-      let bestTranscript = finalTranscript;
-      let bestAcc = scoreAccuracy(finalTranscript, data.targetText);
-      for (const alt of altList) {
-        const acc = scoreAccuracy(alt, data.targetText);
-        if (acc > bestAcc) {
-          bestAcc = acc;
-          bestTranscript = alt;
-        }
+      const candidates = [finalTranscript, ...altList];
+      const accuracies = await Promise.all(
+        candidates.map((candidate) => scoreAccuracy(candidate, data.targetText))
+      );
+
+      let bestIndex = 0;
+      for (let i = 1; i < accuracies.length; i++) {
+        if (accuracies[i] > accuracies[bestIndex]) bestIndex = i;
       }
 
-      onChange({ attempted: true, transcript: bestTranscript, accuracy: bestAcc });
+      setPhase('scored');
+      onChange({
+        attempted: true,
+        transcript: candidates[bestIndex],
+        accuracy: accuracies[bestIndex],
+      });
     },
     [clearTimer, data.targetText, onChange, speechEffectivelySupported]
   );
@@ -154,8 +180,6 @@ export default function QuizMode({ question, workingAnswer, onChange, disabled }
     if (speech.isSupported) {
       const started = await speech.start();
       if (!started) {
-        // Mic permission denied (or similar) before recognition could
-        // even begin — don't strand the UI on "Listening…" forever.
         handleStop();
         return;
       }
@@ -202,7 +226,11 @@ export default function QuizMode({ question, workingAnswer, onChange, disabled }
       )}
 
       {!!data.imageUrl && (
-        <Image source={{ uri: data.imageUrl }} style={styles.illustration} resizeMode="contain" />
+        <Image
+          source={{ uri: data.imageUrl }}
+          style={[styles.illustration, { aspectRatio: imageAspectRatio }]}
+          resizeMode="contain"
+        />
       )}
 
       {!!data.translation && <Text style={styles.translationBelowImage}>{data.translation}</Text>}
@@ -284,7 +312,7 @@ export default function QuizMode({ question, workingAnswer, onChange, disabled }
 
           {/* TEMP DEBUG — remove once the scoring issue is confirmed fixed */}
           <View style={styles.debugCard}>
-            <Text style={styles.debugLabel}>🌸 Debug</Text>
+            <Text style={styles.debugLabel}>🌸 Debug 🌸</Text>
             <View style={styles.debugRow}>
               <Text style={styles.debugKey}>spoken</Text>
               <Text style={styles.debugValue}>{JSON.stringify(transcript)}</Text>
@@ -333,16 +361,21 @@ const styles = StyleSheet.create({
     borderRadius: 999,
     paddingVertical: 5,
     paddingHorizontal: 14,
-    marginBottom: 12,
+    marginBottom: 8, // was 12 — a little tighter to help everything fit
   },
   scenarioBadgeText: { fontFamily: FONTS.body, fontSize: 12, fontWeight: '700', color: COLORS.gold, letterSpacing: 0.4 },
 
+  // Height is now capped via maxHeight below, in addition to the inline
+  // aspectRatio — so a tall image gets letterboxed by resizeMode="contain"
+  // instead of stretching the box to its full natural height.
   illustration: {
     width: '100%',
-    height: 220,
+    maxHeight: MAX_ILLUSTRATION_HEIGHT,
+    alignSelf: 'center',
     borderRadius: 16,
-    marginBottom: 10,
+    marginBottom: 8, // was 10
     backgroundColor: 'rgba(198,93,123,0.06)',
+    overflow: 'hidden',
   },
   translationBelowImage: {
     fontFamily: FONTS.body,
@@ -350,7 +383,7 @@ const styles = StyleSheet.create({
     fontWeight: '600',
     color: COLORS.inkSoft,
     textAlign: 'center',
-    marginBottom: 16,
+    marginBottom: 10, // was 16
   },
   timerWrap: { marginTop: 14, marginBottom: 4 },
   timerTrack: { height: 6, borderRadius: 3, backgroundColor: 'rgba(198,93,123,0.12)', overflow: 'hidden' },
@@ -378,11 +411,11 @@ const styles = StyleSheet.create({
   transcriptText: { fontFamily: FONTS.body, fontSize: 13, color: COLORS.inkSoft, marginTop: 10, textAlign: 'center' },
   transcriptQuoted: { fontWeight: '700', color: COLORS.deep },
 
-  scoreBadge: { marginTop: 14, borderRadius: 16, paddingVertical: 14, paddingHorizontal: 24, alignItems: 'center', minWidth: 180 },
+  scoreBadge: { marginTop: 14, borderRadius: 14, paddingVertical: 8, paddingHorizontal: 18, alignItems: 'center', minWidth: 130 },
   scoreBadgePass: { backgroundColor: 'rgba(127,169,138,0.18)' },
   scoreBadgeFail: { backgroundColor: 'rgba(192,57,43,0.1)' },
   scoreBadgeUngraded: { backgroundColor: 'rgba(198,93,123,0.08)' },
-  scoreText: { fontFamily: FONTS.display, fontSize: 22, fontWeight: '700', color: COLORS.deep },
+  scoreText: { fontFamily: FONTS.display, fontSize: 15, fontWeight: '700', color: COLORS.deep },
   scoreVerdict: { fontFamily: FONTS.body, fontSize: 13, color: COLORS.inkSoft, marginTop: 2 },
 
   retryBtn: { marginTop: 12, paddingVertical: 6, paddingHorizontal: 14 },
