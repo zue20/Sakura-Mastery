@@ -1,0 +1,57 @@
+diff --git a/node_modules/kuromoji/src/loader/BrowserDictionaryLoader.js b/node_modules/kuromoji/src/loader/BrowserDictionaryLoader.js
+index 04bfdcd..f49594f 100644
+--- a/node_modules/kuromoji/src/loader/BrowserDictionaryLoader.js
++++ b/node_modules/kuromoji/src/loader/BrowserDictionaryLoader.js
+@@ -14,12 +14,13 @@
+  * See the License for the specific language governing permissions and
+  * limitations under the License.
+  */
+-
+ "use strict";
+-
+-var zlib = require("zlibjs/bin/gunzip.min.js");
++// PATCHED: original used zlibjs/bin/gunzip.min.js, an old UMD bundle that
++// Metro's bundler doesn't unwrap correctly (Zlib.Gunzip comes back
++// undefined at runtime). Swapped for pako, which is actively maintained
++// and bundles cleanly under Metro/webpack alike.
++var pako = require("pako");
+ var DictionaryLoader = require("./DictionaryLoader");
+-
+ /**
+  * BrowserDictionaryLoader inherits DictionaryLoader, using jQuery XHR for download
+  * @param {string} dic_path Dictionary path
+@@ -28,9 +29,7 @@ var DictionaryLoader = require("./DictionaryLoader");
+ function BrowserDictionaryLoader(dic_path) {
+     DictionaryLoader.apply(this, [dic_path]);
+ }
+-
+ BrowserDictionaryLoader.prototype = Object.create(DictionaryLoader.prototype);
+-
+ /**
+  * Utility function to load gzipped dictionary
+  * @param {string} url Dictionary URL
+@@ -46,9 +45,7 @@ BrowserDictionaryLoader.prototype.loadArrayBuffer = function (url, callback) {
+             return;
+         }
+         var arraybuffer = this.response;
+-
+-        var gz = new zlib.Zlib.Gunzip(new Uint8Array(arraybuffer));
+-        var typed_array = gz.decompress();
++        var typed_array = pako.ungzip(new Uint8Array(arraybuffer));
+         callback(null, typed_array.buffer);
+     };
+     xhr.onerror = function (err) {
+@@ -56,12 +53,10 @@ BrowserDictionaryLoader.prototype.loadArrayBuffer = function (url, callback) {
+     };
+     xhr.send();
+ };
+-
+ /**
+  * Callback
+  * @callback BrowserDictionaryLoader~onLoad
+  * @param {Object} err Error object
+  * @param {Uint8Array} buffer Loaded buffer
+  */
+-
+ module.exports = BrowserDictionaryLoader;
+\ No newline at end of file
