@@ -5,7 +5,9 @@ import PracticeCompleteScreen from './components/PracticeCompleteScreen';
 import { COLORS, FONTS } from '../../dashboard/theme';
 import { useTextToSpeech } from '../../../hooks/useTextToSpeech.js';
 import DeviceWarningBanner from '../../../components/DeviceWarningBanner';
+import PronunciationGuide from '../../../components/PronunciationGuide';
 import { isIOSDevice, getIOSMajorVersion } from '../../../utils/deviceDetection';
+
 
 function getAudioBannerMessage(error) {
   if (!error) return null;
@@ -255,27 +257,32 @@ function ListeningPracticeScreenInner({ route, navigation, onRestart }) {
         </Pressable>
 
         {showTranscript && (
-          <View style={styles.transcriptBox}>
-            <Text style={styles.transcriptSectionLabel}>日本語 Japanese</Text>
-            <Text style={styles.transcriptScript}>
-              {current?.audio?.text || current?.prompt || '—'}
-            </Text>
+  <View style={styles.transcriptBox}>
+    <Text style={styles.transcriptSectionLabel}>日本語 Japanese</Text>
+    <Text style={styles.transcriptScript}>
+      {current?.audio?.text || current?.prompt || '—'}
+    </Text>
+    <PronunciationGuide
+      text={current?.audio?.text || current?.prompt}
+      lang={current?.audio?.lang ?? 'ja-JP'}
+      variant="compact"
+    />
 
-            <View style={styles.transcriptDivider} />
+    <View style={styles.transcriptDivider} />
 
-            <Text style={styles.transcriptSectionLabel}>English Meaning</Text>
-            <Text style={styles.transcriptMeaning}>
-              {current?.translation || 'No English meaning added for this question yet.'}
-            </Text>
+    <Text style={styles.transcriptSectionLabel}>English Meaning</Text>
+    <Text style={styles.transcriptMeaning}>
+      {current?.translation || 'No English meaning added for this question yet.'}
+    </Text>
 
-            {!!current?.explanation && (
-              <>
-                <View style={styles.transcriptDivider} />
-                <Text style={styles.transcriptExplanation}>{current.explanation}</Text>
-              </>
-            )}
-          </View>
-        )}
+    {!!current?.explanation && (
+      <>
+        <View style={styles.transcriptDivider} />
+        <Text style={styles.transcriptExplanation}>{current.explanation}</Text>
+      </>
+    )}
+  </View>
+)}
       </View>
 
       <View style={styles.navRow}>

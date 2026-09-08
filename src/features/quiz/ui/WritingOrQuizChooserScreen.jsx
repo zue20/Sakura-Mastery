@@ -6,9 +6,6 @@ export default function WritingOrQuizChooserScreen({ route, navigation }) {
   const { title, moduleType, level } = route?.params ?? {};
 
   const goToWriting = () => {
-    // Kana (moduleType 'basic') gets the dedicated Practice screen — random
-    // 20-of-92 session. Every other module (Kanji, etc.) keeps using the
-    // original WritingPracticeScreen unchanged.
     const target = moduleType === 'basic' ? 'KanaPractice' : 'WritingPractice';
     navigation.navigate(target, { title, moduleType, level });
   };
@@ -20,6 +17,17 @@ export default function WritingOrQuizChooserScreen({ route, navigation }) {
     <View style={styles.root}>
       <Text style={styles.title}>{title}</Text>
       <Text style={styles.subtitle}>Choose how you'd like to practice</Text>
+
+      {moduleType === 'basic' && (
+        <Pressable
+          style={styles.optionBtn}
+          onPress={() => navigation.navigate('Phonetics', { title, moduleType, level })}
+        >
+          <Text style={styles.optionIcon}>あ</Text>
+          <Text style={styles.optionLabel}>Phonetics Guide</Text>
+          <Text style={styles.optionDesc}>Learn the core pronunciation rules first</Text>
+        </Pressable>
+      )}
 
       <Pressable style={styles.optionBtn} onPress={goToWriting}>
         <Text style={styles.optionIcon}>🖌️</Text>
@@ -41,7 +49,7 @@ export default function WritingOrQuizChooserScreen({ route, navigation }) {
 }
 
 const styles = StyleSheet.create({
-  root: { flex: 1, alignItems: 'center', justifyContent: 'center', gap: 14, padding: 20, backgroundColor: '#eebbd0', },
+  root: { flex: 1, alignItems: 'center', justifyContent: 'center', gap: 14, padding: 20, backgroundColor: '#eebbd0' },
   title: { fontFamily: FONTS.display, fontSize: 22, color: COLORS.deep },
   subtitle: { fontFamily: FONTS.body, fontSize: 13, color: COLORS.inkSoft, marginBottom: 10 },
   optionBtn: {

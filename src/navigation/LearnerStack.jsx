@@ -10,6 +10,7 @@ import FlashcardScreen from '../features/quiz/ui/FlashcardScreen';
 import ListeningPracticeScreen from '../features/quiz/ui/ListeningPracticeScreen';
 import SpeakingPracticeScreen from '../features/quiz/ui/SpeakingPracticeScreen';
 import ReviewHubScreen from '../features/review/ui/ReviewHubScreen';
+import PhoneticsScreen from '../features/quiz/ui/PhoneticsScreen';
 
 const Stack = createNativeStackNavigator();
 
@@ -26,6 +27,7 @@ export default function LearnerStack() {
       <Stack.Screen name="ListeningPractice" component={ListeningPracticeScreen} />
       <Stack.Screen name="SpeakingPractice" component={SpeakingPracticeScreen} />
       <Stack.Screen name="ReviewHub" component={ReviewHubScreen} />
+      <Stack.Screen name="Phonetics" component={PhoneticsScreen} />
     </Stack.Navigator>
   );
 }

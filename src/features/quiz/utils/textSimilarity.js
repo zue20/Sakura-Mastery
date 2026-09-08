@@ -1,4 +1,4 @@
-import { toHiraganaReading } from './kanjiReading';
+import { toHiraganaReading } from '../../../utils/kanjiReading';
 
 // Normalized Levenshtein distance -> 0-100 accuracy score.
 function levenshteinDistance(a, b) {

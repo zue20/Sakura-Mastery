@@ -5,6 +5,7 @@ import { AudioRow } from '../../../shadowing/ui/AudioRow';
 import { TTSAudioRow } from '../../../shadowing/ui/TTSAudioRow';
 import { LiveWaveform } from '../../../shadowing/ui/LiveWaveform';
 import { COLORS, FONTS } from '../../../dashboard/theme';
+import PronunciationGuide from '../../../../components/PronunciationGuide';
 
 // Free practice — no timer, no grading, unlimited re-recording.
 export default function PracticeMode({ question }) {
@@ -49,6 +50,15 @@ export default function PracticeMode({ question }) {
       {!!data.translation && <Text style={styles.meaning}>{data.translation}</Text>}
 
       <TTSAudioRow text={data.audio?.text ?? data.targetText} lang={data.audio?.lang ?? 'ja-JP'} />
+
+{/* Plain romaji line only — TTSAudioRow above already shows the kana
+    and has its own Listen button. */}
+<PronunciationGuide
+  text={data.targetText}
+  lang={data.audio?.lang ?? 'ja-JP'}
+  variant="compact"
+/>
+
       {isRecorded && <AudioRow uri={audioUri} label="Your recording" />}
 
       <View style={styles.waveformWrap}>

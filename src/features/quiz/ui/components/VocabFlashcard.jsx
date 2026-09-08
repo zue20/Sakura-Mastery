@@ -9,10 +9,11 @@ import Animated, {
 import { COLORS, FONTS } from '../../../dashboard/theme';
 import { useTextToSpeech } from '../../../../hooks/useTextToSpeech';
 import DeviceWarningBanner from '../../../../components/DeviceWarningBanner';
+import PronunciationGuide from '../../../../components/PronunciationGuide';
 import { isIOSDevice, getIOSMajorVersion } from '../../../../utils/deviceDetection';
 
 const CARD_WIDTH = 340;
-const CARD_HEIGHT = 320;
+const CARD_HEIGHT = 360; // was 320 — extra room so the romaji line doesn't crowd "Tap to flip"
 
 function getAudioBannerMessage(error) {
   if (!error) return null;
@@ -70,6 +71,9 @@ export default function VocabFlashcard({ front, back, imageUrl, audio, isFlipped
           <Text style={styles.label}>Vocabulary</Text>
           {!!imageUrl && <Image source={{ uri: imageUrl }} style={styles.image} resizeMode="contain" />}
           <Text style={styles.frontText}>{front}</Text>
+          <View style={styles.romajiWrap}>
+            <PronunciationGuide text={front} lang={audio?.lang ?? 'ja-JP'} variant="compact" />
+          </View>
           <Text style={styles.tapHint}>Tap to flip</Text>
         </Animated.View>
         <Animated.View style={[styles.face, styles.faceBack, backStyle]}>
@@ -96,6 +100,7 @@ const styles = StyleSheet.create({
     alignItems: 'center',
     justifyContent: 'center',
     padding: 20,
+    paddingBottom: 40, // extra clearance above the absolutely-positioned tapHint
     gap: 10,
     backfaceVisibility: 'hidden',
     shadowColor: '#3A2C33',
@@ -113,8 +118,12 @@ const styles = StyleSheet.create({
     textTransform: 'uppercase',
     letterSpacing: 0.5,
   },
-  image: { width: 180, height: 180, marginBottom: 6, borderRadius: 14 },
+  image: { width: 160, height: 160, marginBottom: 4, borderRadius: 14 }, // was 180x180 — slightly smaller to make room
   frontText: { fontFamily: FONTS.display, fontSize: 26, color: COLORS.deep, textAlign: 'center' },
+  romajiWrap: {
+    marginTop: 2,
+    marginBottom: 6,
+  },
   backText: { fontFamily: FONTS.body, fontSize: 18, fontWeight: '700', color: COLORS.plum, textAlign: 'center' },
-  tapHint: { position: 'absolute', bottom: 12, fontFamily: FONTS.body, fontSize: 11, color: COLORS.inkSoft },
+  tapHint: { position: 'absolute', bottom: 14, fontFamily: FONTS.body, fontSize: 11, color: COLORS.inkSoft },
 });

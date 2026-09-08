@@ -6,10 +6,11 @@ import { TTSAudioRow } from '../../../shadowing/ui/TTSAudioRow';
 import { LiveWaveform } from '../../../shadowing/ui/LiveWaveform';
 import { useSpeechRecognition } from '../../hooks/useSpeechRecognition';
 import { scoreAccuracy } from '../../utils/textSimilarity';
-import { warmupReadingEngine } from '../../utils/kanjiReading';
+import { warmupReadingEngine } from '../../../../utils/kanjiReading';
 import { COLORS, FONTS } from '../../../dashboard/theme';
 import DeviceWarningBanner from '../../../../components/DeviceWarningBanner';
 import { isIPad } from '../../../../utils/deviceDetection';
+
 
 const QUIZ_DURATION = 30; // seconds
 const PASS_THRESHOLD = 80; // must match useQuizQuestions.js checkAnswer
