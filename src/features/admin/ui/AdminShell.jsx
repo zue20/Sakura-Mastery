@@ -1,5 +1,6 @@
 import React, { useState } from 'react';
-import { View, Text, Pressable, StyleSheet } from 'react-native';
+import { View, Text, Pressable, StyleSheet, ImageBackground, Platform } from 'react-native';
+import { Ionicons } from '@expo/vector-icons';
 import LogoutButton from '../../../components/LogoutButton';
 import OverviewPanel from './OverviewPanel';
 import QuestionsPanel from './QuestionsPanel';
@@ -9,43 +10,73 @@ import AssetsPanel from './AssetsPanel';
 import SettingsPanel from './SettingsPanel';
 import { ADMIN_COLORS, ADMIN_FONTS } from '../theme';
 
+const adminBackground = require('../../../../assets/cherry-blossoms.jpg');
+
+const ROSE = '#C65D7B';
 
 const NAV_ITEMS = [
-  { key: 'overview', label: 'Overview', emoji: '🍁' },
-  { key: 'questions', label: 'Questions', emoji: '🫧' },
-  { key: 'users', label: 'Users', emoji: '👻' },
-  { key: 'assets', label: 'Assets', emoji: '💖' },
-  { key: 'bulk', label: 'Bulk Tools', emoji: '🍱' },
-  { key: 'settings', label: 'Settings', emoji: '❄️' },
+  { key: 'overview', label: 'Overview', icon: 'grid-outline', iconActive: 'grid' },
+  { key: 'questions', label: 'Questions', icon: 'help-circle-outline', iconActive: 'help-circle' },
+  { key: 'users', label: 'Users', icon: 'people-outline', iconActive: 'people' },
+  { key: 'assets', label: 'Assets', icon: 'images-outline', iconActive: 'images' },
+  { key: 'bulk', label: 'Bulk Tools', icon: 'layers-outline', iconActive: 'layers' },
+  { key: 'settings', label: 'Settings', icon: 'settings-outline', iconActive: 'settings' },
 ];
 
 export default function AdminShell() {
   const [activeTab, setActiveTab] = useState('overview');
 
   return (
-    <View style={styles.root}>
+    <ImageBackground source={adminBackground} style={styles.root} resizeMode="cover">
+      <View style={styles.scrim} pointerEvents="none" />
+
       <View style={styles.sidebar}>
         <View>
-          <Text style={styles.logo}>🍀🌷🌻 SakuraMastery</Text>
-          <Text style={styles.logoSub}>Admin</Text>
-        </View>
+          {/* Brand */}
+          <View style={styles.brandRow}>
+            <View style={styles.brandMark}>
+              <Ionicons name="flower-outline" size={20} color="#fff" />
+            </View>
+            <View>
+              <Text style={styles.logo}>SakuraMastery</Text>
+              <Text style={styles.logoSub}>ADMIN CONSOLE</Text>
+            </View>
+          </View>
 
-        <View style={styles.navList}>
-          {NAV_ITEMS.map((item) => (
-            <Pressable
-              key={item.key}
-              onPress={() => setActiveTab(item.key)}
-              style={[styles.navItem, activeTab === item.key && styles.navItemActive]}
-            >
-              <Text style={styles.navEmoji}>{item.emoji}</Text>
-              <Text style={[styles.navItemText, activeTab === item.key && styles.navItemTextActive]}>
-                {item.label}
-              </Text>
-            </Pressable>
-          ))}
+          <View style={styles.divider} />
+
+          {/* Navigation */}
+          <Text style={styles.navLabel}>MENU</Text>
+          <View style={styles.navList}>
+            {NAV_ITEMS.map((item) => {
+              const active = activeTab === item.key;
+              return (
+                <Pressable
+                  key={item.key}
+                  onPress={() => setActiveTab(item.key)}
+                  style={({ hovered, pressed }) => [
+                    styles.navItem,
+                    (hovered || pressed) && !active && styles.navItemHover,
+                    active && styles.navItemActive,
+                  ]}
+                >
+                  <View style={[styles.activeBar, active && styles.activeBarOn]} />
+                  <Ionicons
+                    name={active ? item.iconActive : item.icon}
+                    size={18}
+                    color={active ? ROSE : ADMIN_COLORS.textMuted}
+                  />
+                  <Text style={[styles.navItemText, active && styles.navItemTextActive]}>
+                    {item.label}
+                  </Text>
+                </Pressable>
+              );
+            })}
+          </View>
         </View>
 
         <View style={styles.sidebarFooter}>
+          <View style={styles.divider} />
           <LogoutButton />
         </View>
       </View>
@@ -58,29 +89,83 @@ export default function AdminShell() {
         {activeTab === 'bulk' && <BulkToolsPanel />}
         {activeTab === 'settings' && <SettingsPanel />}
       </View>
-    </View>
+    </ImageBackground>
   );
 }
 
+const glass = Platform.select({
+  web: { backdropFilter: 'blur(18px)', WebkitBackdropFilter: 'blur(18px)' },
+  default: {},
+});
+
 const styles = StyleSheet.create({
   root: { flex: 1, flexDirection: 'row', backgroundColor: ADMIN_COLORS.bg },
+  scrim: {
+    ...StyleSheet.absoluteFillObject,
+    backgroundColor: 'rgba(255,255,255,0.10)',
+  },
+
   sidebar: {
-    width: 220,
-    backgroundColor: ADMIN_COLORS.sidebarBg,
-    paddingVertical: 24,
-    paddingHorizontal: 14,
+    width: 248,
+    backgroundColor: 'rgba(255,255,255,0.78)',
+    paddingTop: 26,
+    paddingBottom: 20,
+    paddingHorizontal: 16,
     justifyContent: 'space-between',
     borderRightWidth: 1,
-    borderRightColor: ADMIN_COLORS.border,
+    borderRightColor: 'rgba(255,255,255,0.9)',
+    shadowColor: ROSE,
+    shadowOffset: { width: 6, height: 0 },
+    shadowOpacity: 0.12,
+    shadowRadius: 24,
+    elevation: 8,
+    ...glass,
   },
-  logo: { fontFamily: ADMIN_FONTS.display, color: ADMIN_COLORS.text, fontSize: 17, fontWeight: '700' },
-  logoSub: { fontFamily: ADMIN_FONTS.body, color: ADMIN_COLORS.textMuted, fontSize: 12, marginTop: 2, marginBottom: 28 },
-  navList: { gap: 6 },
-  navItem: { flexDirection: 'row', alignItems: 'center', gap: 10, paddingVertical: 10, paddingHorizontal: 10, borderRadius: 10 },
-  navItemActive: { backgroundColor: ADMIN_COLORS.sidebarActiveBg },
-  navEmoji: { fontSize: 15 },
-  navItemText: { fontFamily: ADMIN_FONTS.body, fontSize: 13, color: ADMIN_COLORS.sidebarText },
-  navItemTextActive: { color: ADMIN_COLORS.sidebarActiveText, fontWeight: '700' },
+
+  brandRow: { flexDirection: 'row', alignItems: 'center', gap: 12, paddingHorizontal: 4 },
+  brandMark: {
+    width: 40,
+    height: 40,
+    borderRadius: 12,
+    backgroundColor: ROSE,
+    alignItems: 'center',
+    justifyContent: 'center',
+    shadowColor: ROSE,
+    shadowOffset: { width: 0, height: 4 },
+    shadowOpacity: 0.35,
+    shadowRadius: 8,
+  },
+  logo: { fontFamily: ADMIN_FONTS.display, color: ADMIN_COLORS.text, fontSize: 17, fontWeight: '700', letterSpacing: 0.2 },
+  logoSub: { fontFamily: ADMIN_FONTS.body, color: ADMIN_COLORS.textMuted, fontSize: 10, fontWeight: '700', letterSpacing: 1.6, marginTop: 2 },
+
+  divider: { height: 1, backgroundColor: 'rgba(198,93,123,0.16)', marginVertical: 20 },
+
+  navLabel: {
+    fontFamily: ADMIN_FONTS.body,
+    fontSize: 10,
+    fontWeight: '700',
+    letterSpacing: 1.6,
+    color: ADMIN_COLORS.textMuted,
+    paddingHorizontal: 10,
+    marginBottom: 10,
+  },
+  navList: { gap: 4 },
+  navItem: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 12,
+    paddingVertical: 11,
+    paddingRight: 12,
+    paddingLeft: 6,
+    borderRadius: 12,
+  },
+  navItemHover: { backgroundColor: 'rgba(198,93,123,0.07)' },
+  navItemActive: { backgroundColor: 'rgba(198,93,123,0.14)' },
+  activeBar: { width: 3, height: 18, borderRadius: 2, backgroundColor: 'transparent' },
+  activeBarOn: { backgroundColor: ROSE },
+  navItemText: { fontFamily: ADMIN_FONTS.body, fontSize: 14, fontWeight: '500', color: ADMIN_COLORS.sidebarText },
+  navItemTextActive: { color: ROSE, fontWeight: '700' },
+
   sidebarFooter: { paddingHorizontal: 4 },
-  content: { flex: 1, padding: 24 },
+  content: { flex: 1, padding: 28 },
 });

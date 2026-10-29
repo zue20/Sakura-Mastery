@@ -1,12 +1,14 @@
 import React from 'react';
 import { View, Text, Pressable, StyleSheet } from 'react-native';
+import { Ionicons } from '@expo/vector-icons';
 import { COLORS, FONTS } from '../../dashboard/theme';
+
 const TYPE_OPTIONS = [
-  { value: 'dragdrop', label: '🧩 Drag & Drop' },
-  { value: 'multipleChoice', label: '💭 Multiple Choice' },
-  { value: 'kanjiWrite', label: '🖋️ Kanji Writing' },
-  { value: 'kanaWrite', label: '🖋️ Kana Writing' },
-  { value: 'speaking', label: '🎙️ Speaking' },
+  { value: 'dragdrop', label: 'Drag & Drop', icon: 'extension-puzzle-outline' },
+  { value: 'multipleChoice', label: 'Multiple Choice', icon: 'chatbubble-ellipses-outline' },
+  { value: 'kanjiWrite', label: 'Kanji Writing', icon: 'brush-outline' },
+  { value: 'kanaWrite', label: 'Kana Writing', icon: 'create-outline' },
+  { value: 'speaking', label: 'Speaking', icon: 'mic-outline' },
 ];
 
 export default function QuestionTypeSelector({ value, onChange, disabled }) {
@@ -25,6 +27,11 @@ export default function QuestionTypeSelector({ value, onChange, disabled }) {
               disabled && styles.pillDisabled,
             ]}
           >
+            <Ionicons
+              name={opt.icon}
+              size={15}
+              color={isSelected ? COLORS.inkBold : COLORS.plum}
+            />
             <Text style={[styles.pillText, isSelected && styles.pillTextSelected]}>{opt.label}</Text>
           </Pressable>
         );
@@ -36,6 +43,9 @@ export default function QuestionTypeSelector({ value, onChange, disabled }) {
 const styles = StyleSheet.create({
   row: { flexDirection: 'row', gap: 8, flexWrap: 'wrap' },
   pill: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 7,
     paddingVertical: 8,
     paddingHorizontal: 14,
     borderRadius: 999,

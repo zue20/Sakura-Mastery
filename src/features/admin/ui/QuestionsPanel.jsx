@@ -1,5 +1,6 @@
 import React, { useState, useCallback, useMemo } from 'react';
 import { View, Text, Pressable, StyleSheet, Alert, Platform } from 'react-native';
+import { Ionicons } from '@expo/vector-icons';
 import { useAdminQuestions } from '../hooks/useAdminQuestions';
 import QuestionListPanel from './QuestionListPanel';
 import QuestionEditorForm from './QuestionEditorForm';
@@ -9,6 +10,8 @@ import SearchBar from './components/SearchBar';
 import EmptyState from './components/EmptyState';
 import { ADMIN_COLORS as COLORS, ADMIN_FONTS as FONTS } from '../theme';
 import { LEVEL_FILTERS, MODULE_FILTERS, SORT_OPTIONS } from '../constants';
+
+const ROSE = '#C65D7B';
 
 export default function QuestionsPanel() {
   const [levelFilter, setLevelFilter] = useState('All');
@@ -126,16 +129,28 @@ export default function QuestionsPanel() {
 
   return (
     <>
+      <View style={styles.headingPill}>
+        <View style={styles.badgeSmall}>
+          <Ionicons name="help-circle" size={15} color="#fff" />
+        </View>
+        <Text style={styles.heading}>Questions</Text>
+      </View>
+
       <ProgressTracker progressByLevel={progressByLevel} expanded={showTracker} onToggle={() => setShowTracker((v) => !v)} />
 
       <View style={styles.statsRow}>
-        <Text style={styles.statsText}>{stats.total} total questions</Text>
+        <View style={styles.totalPill}>
+          <Ionicons name="albums-outline" size={13} color={COLORS.textMuted} />
+          <Text style={styles.statsText}>{stats.total} total questions</Text>
+        </View>
         {Object.entries(stats.byModuleType).map(([type, count]) => (
           <Text key={type} style={styles.statsPill}>{type}: {count}</Text>
         ))}
       </View>
 
-      <SearchBar value={searchText} onChange={setSearchText} />
+      <View style={styles.searchWrap}>
+        <SearchBar value={searchText} onChange={setSearchText} />
+      </View>
 
       <View style={styles.filterRow}>
         <FilterGroup label="Level" options={LEVEL_FILTERS} value={levelFilter} onChange={setLevelFilter} />
@@ -144,18 +159,29 @@ export default function QuestionsPanel() {
       </View>
 
       <View style={styles.toolbar}>
-        <Pressable style={styles.addBtn} onPress={handleAddNew}>
-          <Text style={styles.addBtnText}>+ Add Question</Text>
+        <Pressable
+          style={({ hovered, pressed }) => [styles.addBtn, (hovered || pressed) && styles.addBtnHover]}
+          onPress={handleAddNew}
+        >
+          <Ionicons name="add-circle-outline" size={17} color="#FFFFFF" />
+          <Text style={styles.addBtnText}>Add Question</Text>
         </Pressable>
         {hasActiveFilters && (
-          <Pressable style={styles.clearFiltersBtn} onPress={clearAllFilters}>
+          <Pressable
+            style={({ hovered, pressed }) => [styles.clearFiltersBtn, (hovered || pressed) && styles.clearFiltersBtnHover]}
+            onPress={clearAllFilters}
+          >
+            <Ionicons name="close-circle-outline" size={15} color={ROSE} />
             <Text style={styles.clearFiltersText}>Clear filters</Text>
           </Pressable>
         )}
       </View>
 
       {isLoading ? (
-        <Text style={styles.loadingText}>Loading…</Text>
+        <View style={styles.stateCard}>
+          <Ionicons name="hourglass-outline" size={20} color={COLORS.textMuted} />
+          <Text style={styles.loadingText}>Loading…</Text>
+        </View>
       ) : visibleQuestions.length === 0 ? (
         <EmptyState hasActiveFilters={hasActiveFilters} onClearFilters={clearAllFilters} onAddNew={handleAddNew} />
       ) : (
@@ -165,15 +191,128 @@ export default function QuestionsPanel() {
   );
 }
 
+const glass = Platform.select({
+  web: { backdropFilter: 'blur(14px)', WebkitBackdropFilter: 'blur(14px)' },
+  default: {},
+});
+
 const styles = StyleSheet.create({
-  statsRow: { flexDirection: 'row', flexWrap: 'wrap', gap: 8, marginBottom: 12, alignItems: 'center' },
-  statsText: { fontFamily: FONTS.body, fontSize: 13, color: COLORS.textMuted },
-  statsPill: { fontFamily: FONTS.body, fontSize: 11, color: COLORS.text, backgroundColor: COLORS.accentSoft, borderRadius: 999, paddingVertical: 3, paddingHorizontal: 10 },
-  filterRow: { gap: 10, marginBottom: 12 },
+  headingPill: {
+    alignSelf: 'flex-start',
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 10,
+    paddingVertical: 7,
+    paddingLeft: 8,
+    paddingRight: 18,
+    borderRadius: 999,
+    backgroundColor: 'rgba(255,255,255,0.82)',
+    borderWidth: 1,
+    borderColor: 'rgba(255,255,255,0.95)',
+    marginBottom: 16,
+    shadowColor: ROSE,
+    shadowOffset: { width: 0, height: 4 },
+    shadowOpacity: 0.14,
+    shadowRadius: 12,
+    ...glass,
+  },
+  badgeSmall: {
+    width: 26,
+    height: 26,
+    borderRadius: 13,
+    backgroundColor: ROSE,
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
+  heading: { fontFamily: FONTS.display, fontSize: 20, fontWeight: '700', color: COLORS.text, letterSpacing: 0.2 },
+
+  statsRow: { flexDirection: 'row', flexWrap: 'wrap', gap: 8, marginBottom: 14, alignItems: 'center' },
+  totalPill: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 6,
+    paddingVertical: 5,
+    paddingHorizontal: 12,
+    borderRadius: 999,
+    backgroundColor: 'rgba(255,255,255,0.78)',
+    borderWidth: 1,
+    borderColor: 'rgba(255,255,255,0.95)',
+    ...glass,
+  },
+  statsText: { fontFamily: FONTS.body, fontSize: 12, fontWeight: '600', color: COLORS.textMuted },
+  statsPill: {
+    fontFamily: FONTS.body,
+    fontSize: 11,
+    fontWeight: '600',
+    color: ROSE,
+    backgroundColor: 'rgba(198,93,123,0.14)',
+    borderRadius: 999,
+    paddingVertical: 4,
+    paddingHorizontal: 11,
+    overflow: 'hidden',
+  },
+
+  searchWrap: {
+    padding: 6,
+    borderRadius: 16,
+    backgroundColor: 'rgba(255,255,255,0.78)',
+    borderWidth: 1,
+    borderColor: 'rgba(255,255,255,0.95)',
+    marginBottom: 12,
+    ...glass,
+  },
+  filterRow: {
+    gap: 10,
+    marginBottom: 14,
+    padding: 12,
+    borderRadius: 16,
+    backgroundColor: 'rgba(255,255,255,0.7)',
+    borderWidth: 1,
+    borderColor: 'rgba(255,255,255,0.9)',
+    ...glass,
+  },
+
   toolbar: { flexDirection: 'row', gap: 10, marginBottom: 16, alignItems: 'center', flexWrap: 'wrap' },
-  addBtn: { backgroundColor: COLORS.accent, borderRadius: 10, paddingVertical: 10, paddingHorizontal: 18 },
-  addBtnText: { fontFamily: FONTS.body, fontSize: 13, fontWeight: '700', color: '#FFFFFF' },
-  clearFiltersBtn: { paddingVertical: 10, paddingHorizontal: 14 },
-  clearFiltersText: { fontFamily: FONTS.body, fontSize: 13, color: COLORS.accent, fontWeight: '600', textDecorationLine: 'underline' },
-  loadingText: { fontFamily: FONTS.body, fontSize: 14, color: COLORS.textMuted, textAlign: 'center', marginTop: 40 },
+  addBtn: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 8,
+    backgroundColor: ROSE,
+    borderRadius: 12,
+    paddingVertical: 11,
+    paddingHorizontal: 18,
+    shadowColor: ROSE,
+    shadowOffset: { width: 0, height: 4 },
+    shadowOpacity: 0.3,
+    shadowRadius: 10,
+  },
+  addBtnHover: { opacity: 0.9 },
+  addBtnText: { fontFamily: FONTS.body, fontSize: 13, fontWeight: '700', color: '#FFFFFF', letterSpacing: 0.2 },
+  clearFiltersBtn: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 6,
+    paddingVertical: 9,
+    paddingHorizontal: 14,
+    borderRadius: 999,
+    borderWidth: 1,
+    borderColor: 'rgba(198,93,123,0.35)',
+    backgroundColor: 'rgba(255,255,255,0.6)',
+  },
+  clearFiltersBtnHover: { backgroundColor: 'rgba(198,93,123,0.1)' },
+  clearFiltersText: { fontFamily: FONTS.body, fontSize: 12, color: ROSE, fontWeight: '700' },
+
+  stateCard: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'center',
+    gap: 10,
+    padding: 16,
+    borderRadius: 16,
+    backgroundColor: 'rgba(255,255,255,0.86)',
+    borderWidth: 1,
+    borderColor: 'rgba(255,255,255,0.95)',
+    ...glass,
+  },
+  loadingText: { fontFamily: FONTS.body, fontSize: 14, color: COLORS.textMuted },
 });
