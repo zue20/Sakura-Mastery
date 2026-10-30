@@ -10,7 +10,7 @@ import AssetsPanel from './AssetsPanel';
 import SettingsPanel from './SettingsPanel';
 import { ADMIN_COLORS, ADMIN_FONTS } from '../theme';
 
-const adminBackground = require('../../../../assets/cherry-blossoms.jpg');
+const adminBackground = require('../../../../assets/sakura.jpg');
 
 const ROSE = '#C65D7B';
 

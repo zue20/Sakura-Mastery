@@ -1,15 +1,21 @@
 import React from 'react';
 import { View, Text, StyleSheet } from 'react-native';
+import { Ionicons } from '@expo/vector-icons';
 import { ADMIN_COLORS, ADMIN_FONTS } from '../../theme';
 
-const ACTION_EMOJI = {
-  question_created: '💮',
-  question_updated: '🪄',
-  question_deleted: '🗑️',
-  role_changed: '💫',
-  asset_uploaded: '🖼️',
-  asset_deleted: '🗑️',
-  setting_changed: '🏞️',
+const ROSE = '#C65D7B';
+const RED = '#D9534F';
+const GREEN = '#3E8E5A';
+
+// Icon + tint per action type
+const ACTION_META = {
+  question_created: { icon: 'add-circle', color: GREEN },
+  question_updated: { icon: 'create', color: ROSE },
+  question_deleted: { icon: 'trash', color: RED },
+  role_changed: { icon: 'shield-checkmark', color: ROSE },
+  asset_uploaded: { icon: 'cloud-upload', color: GREEN },
+  asset_deleted: { icon: 'trash', color: RED },
+  setting_changed: { icon: 'settings', color: ROSE },
 };
 
 function timeAgo(dateStr) {
@@ -23,14 +29,21 @@ function timeAgo(dateStr) {
 }
 
 export default function ActivityFeedItem({ entry }) {
+  const meta = ACTION_META[entry.action] || { icon: 'ellipse', color: ADMIN_COLORS.textMuted };
+
   return (
     <View style={styles.row}>
-      <Text style={styles.emoji}>{ACTION_EMOJI[entry.action] || '•'}</Text>
+      <View style={[styles.iconCircle, { backgroundColor: `${meta.color}1F` }]}>
+        <Ionicons name={meta.icon} size={15} color={meta.color} />
+      </View>
       <View style={styles.textCol}>
         <Text style={styles.line}>
           <Text style={styles.admin}>{entry.admin_email}</Text> {formatAction(entry)}
         </Text>
-        <Text style={styles.time}>{timeAgo(entry.created_at)}</Text>
+        <View style={styles.timeRow}>
+          <Ionicons name="time-outline" size={11} color={ADMIN_COLORS.textMuted} />
+          <Text style={styles.time}>{timeAgo(entry.created_at)}</Text>
+        </View>
       </View>
     </View>
   );
@@ -50,10 +63,24 @@ function formatAction(entry) {
 }
 
 const styles = StyleSheet.create({
-  row: { flexDirection: 'row', gap: 10, paddingVertical: 10, borderBottomWidth: 1, borderBottomColor: ADMIN_COLORS.border },
-  emoji: { fontSize: 16 },
+  row: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 12,
+    paddingVertical: 11,
+    borderBottomWidth: 1,
+    borderBottomColor: 'rgba(198,93,123,0.14)',
+  },
+  iconCircle: {
+    width: 32,
+    height: 32,
+    borderRadius: 16,
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
   textCol: { flex: 1 },
-  line: { fontFamily: ADMIN_FONTS.body, fontSize: 13, color: ADMIN_COLORS.text },
+  line: { fontFamily: ADMIN_FONTS.body, fontSize: 13, lineHeight: 19, color: ADMIN_COLORS.text },
   admin: { fontWeight: '700' },
-  time: { fontFamily: ADMIN_FONTS.body, fontSize: 11, color: ADMIN_COLORS.textMuted, marginTop: 2 },
+  timeRow: { flexDirection: 'row', alignItems: 'center', gap: 4, marginTop: 2 },
+  time: { fontFamily: ADMIN_FONTS.body, fontSize: 11, color: ADMIN_COLORS.textMuted },
 });
