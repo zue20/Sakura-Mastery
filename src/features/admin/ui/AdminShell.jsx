@@ -1,5 +1,5 @@
 import React, { useState } from 'react';
-import { View, Text, Pressable, StyleSheet, ImageBackground, Platform } from 'react-native';
+import { View, Text, Pressable, StyleSheet, Image, Platform } from 'react-native';
 import { Ionicons } from '@expo/vector-icons';
 import LogoutButton from '../../../components/LogoutButton';
 import OverviewPanel from './OverviewPanel';
@@ -27,8 +27,12 @@ export default function AdminShell() {
   const [activeTab, setActiveTab] = useState('overview');
 
   return (
-    <ImageBackground source={adminBackground} style={styles.root} resizeMode="cover">
-      <View style={styles.scrim} pointerEvents="none" />
+    <View style={styles.root}>
+      {/* Full-window background layer — independent of content size */}
+      <View style={styles.bgLayer} pointerEvents="none">
+        <Image source={adminBackground} style={styles.bgImage} resizeMode="cover" />
+        <View style={styles.scrim} />
+      </View>
 
       <View style={styles.sidebar}>
         <View>
@@ -89,7 +93,7 @@ export default function AdminShell() {
         {activeTab === 'bulk' && <BulkToolsPanel />}
         {activeTab === 'settings' && <SettingsPanel />}
       </View>
-    </ImageBackground>
+    </View>
   );
 }
 
@@ -98,8 +102,21 @@ const glass = Platform.select({
   default: {},
 });
 
+// Fixed to the browser window on web so it always covers the whole screen,
+// even when the page content is taller/wider than the root container.
+const bgLayerPosition = Platform.select({
+  web: { position: 'fixed', top: 0, left: 0, right: 0, bottom: 0, width: '100vw', height: '100vh' },
+  default: { ...StyleSheet.absoluteFillObject },
+});
+
 const styles = StyleSheet.create({
   root: { flex: 1, flexDirection: 'row', backgroundColor: ADMIN_COLORS.bg },
+
+  bgLayer: {
+    ...bgLayerPosition,
+    zIndex: 0,
+  },
+  bgImage: { width: '100%', height: '100%' },
   scrim: {
     ...StyleSheet.absoluteFillObject,
     backgroundColor: 'rgba(255,255,255,0.10)',
@@ -107,6 +124,7 @@ const styles = StyleSheet.create({
 
   sidebar: {
     width: 248,
+    zIndex: 1,
     backgroundColor: 'rgba(255,255,255,0.78)',
     paddingTop: 26,
     paddingBottom: 20,
@@ -167,5 +185,5 @@ const styles = StyleSheet.create({
   navItemTextActive: { color: ROSE, fontWeight: '700' },
 
   sidebarFooter: { paddingHorizontal: 4 },
-  content: { flex: 1, padding: 28 },
+  content: { flex: 1, padding: 28, zIndex: 1 },
 });
