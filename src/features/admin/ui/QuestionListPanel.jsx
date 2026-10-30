@@ -75,21 +75,16 @@ const styles = StyleSheet.create({
   list: { flex: 1 },
   listContent: { gap: 10, paddingBottom: 20 },
 
-  row: {
+    row: {
     flexDirection: 'row',
     alignItems: 'center',
     justifyContent: 'space-between',
-    backgroundColor: 'rgba(255,255,255,0.88)',
+    backgroundColor: 'rgba(255,255,255,0.92)',
     borderWidth: 1,
     borderColor: 'rgba(255,255,255,0.95)',
     borderRadius: 18,
     padding: 14,
     gap: 12,
-    shadowColor: ROSE,
-    shadowOffset: { width: 0, height: 6 },
-    shadowOpacity: 0.1,
-    shadowRadius: 16,
-    ...glass,
   },
   rowMain: { flex: 1, gap: 5 },
   typeBadge: {
